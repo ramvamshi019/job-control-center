@@ -1,0 +1,718 @@
+name,career_url,ats_type,h1b_history_score,priority,is_active,notes
+Pulse,pulse,greenhouse,40,low,1,YC-discovered; 2521 jobs
+Agency,agency,greenhouse,40,low,1,YC-discovered; 801 jobs
+Sila,sila,lever,40,low,1,YC-discovered; 294 jobs
+Distro,distro,lever,40,low,1,YC-discovered; 241 jobs
+Super,super,greenhouse,40,low,1,YC-discovered; 209 jobs
+Legora,legora,ashby,40,low,1,YC-discovered; 187 jobs
+Prolific,prolific,greenhouse,40,low,1,YC-discovered; 173 jobs
+Stage,stage,greenhouse,40,low,1,YC-discovered; 163 jobs
+Tractian,tractian,lever,40,low,1,YC-discovered; 111 jobs
+TRM Labs,trm-labs,ashby,40,low,1,YC-discovered; 110 jobs
+BillionToOne,billiontoone,greenhouse,40,low,1,YC-discovered; 105 jobs
+Astranis,astranis,greenhouse,40,low,1,YC-discovered; 101 jobs
+Finni Health,finni-health,ashby,40,low,1,YC-discovered; 101 jobs
+Zip,zip,ashby,40,low,1,YC-discovered; 100 jobs
+Aleph,aleph,lever,40,low,1,YC-discovered; 99 jobs
+Clara,clara,greenhouse,40,low,1,YC-discovered; 79 jobs
+Clutch,clutch,greenhouse,40,low,1,YC-discovered; 73 jobs
+Instawork,instawork,greenhouse,40,low,1,YC-discovered; 69 jobs
+Abacus,abacus,greenhouse,40,low,1,YC-discovered; 67 jobs
+Ashby,ashby,ashby,40,low,1,YC-discovered; 66 jobs
+Hightouch,hightouch,greenhouse,40,low,1,YC-discovered; 65 jobs
+Deepgram,deepgram,ashby,40,low,1,YC-discovered; 63 jobs
+Fetch,fetch,greenhouse,40,low,1,YC-discovered; 60 jobs
+Inversion Space,inversionspace,greenhouse,40,low,1,YC-discovered; 59 jobs
+Twitch,twitch,greenhouse,40,low,1,YC-discovered; 58 jobs
+Human Interest,humaninterest,greenhouse,40,low,1,YC-discovered; 57 jobs
+Oklo,oklo,greenhouse,40,low,1,YC-discovered; 55 jobs
+Alpaca,alpaca,greenhouse,40,low,1,YC-discovered; 55 jobs
+Flex,flex,greenhouse,40,low,1,YC-discovered; 53 jobs
+PowerX,powerx,greenhouse,40,low,1,YC-discovered; 51 jobs
+ACLU,aclu,greenhouse,40,low,1,YC-discovered; 49 jobs
+Benchling,benchling,ashby,40,low,1,YC-discovered; 48 jobs
+SingleStore,singlestore,greenhouse,40,low,1,YC-discovered; 47 jobs
+Supabase,supabase,ashby,40,low,1,YC-discovered; 47 jobs
+Encord,encord,ashby,40,low,1,YC-discovered; 47 jobs
+HackerRank,hackerrank,greenhouse,40,low,1,YC-discovered; 46 jobs
+Emburse,emburse,lever,40,low,1,YC-discovered; 46 jobs
+May Mobility,maymobility,greenhouse,40,low,1,YC-discovered; 46 jobs
+PagerDuty,pagerduty,greenhouse,40,low,1,YC-discovered; 45 jobs
+Algolia,algolia,greenhouse,40,low,1,YC-discovered; 45 jobs
+Meesho,meesho,lever,40,low,1,YC-discovered; 44 jobs
+Clear,clear,greenhouse,40,low,1,YC-discovered; 43 jobs
+Eight Sleep,eightsleep,ashby,40,low,1,YC-discovered; 43 jobs
+Docker,docker,ashby,40,low,1,YC-discovered; 42 jobs
+Apollo.io,apolloio,greenhouse,40,low,1,YC-discovered; 42 jobs
+SkydropX,skydropx,ashby,40,low,1,YC-discovered; 42 jobs
+Tailor,tailor,ashby,40,low,1,YC-discovered; 41 jobs
+Bird,bird,greenhouse,40,low,1,YC-discovered; 40 jobs
+Twenty,twenty,ashby,40,low,1,YC-discovered; 39 jobs
+Astro Mechanica,astro-mechanica,ashby,40,low,1,YC-discovered; 39 jobs
+Speak,speak,ashby,40,low,1,YC-discovered; 38 jobs
+Canary Technologies,canarytechnologies,lever,40,low,1,YC-discovered; 37 jobs
+Candid Health,candidhealth,ashby,40,low,1,YC-discovered; 37 jobs
+Exa,exa,ashby,40,low,1,YC-discovered; 37 jobs
+Moss,moss,ashby,40,low,1,YC-discovered; 37 jobs
+Netomi,netomi,lever,40,low,1,YC-discovered; 36 jobs
+Nabis,nabis,greenhouse,40,low,1,YC-discovered; 35 jobs
+Taktile,taktile,ashby,40,low,1,YC-discovered; 35 jobs
+MarqVision,marqvision,greenhouse,40,low,1,YC-discovered; 35 jobs
+Level,level,ashby,40,low,1,YC-discovered; 35 jobs
+Overview,overview,ashby,40,low,1,YC-discovered; 34 jobs
+ARQ,arq,ashby,40,low,1,YC-discovered; 34 jobs
+PermitFlow,permitflow,ashby,40,low,1,YC-discovered; 34 jobs
+Scribe,scribe,ashby,40,low,1,YC-discovered; 33 jobs
+Camp,camp,greenhouse,40,low,1,YC-discovered; 33 jobs
+Axle,axle,greenhouse,40,low,1,YC-discovered; 33 jobs
+Reducto,reducto,ashby,40,low,1,YC-discovered; 33 jobs
+Silver,silver,ashby,40,low,1,YC-discovered; 32 jobs
+Gigs,gigs,greenhouse,40,low,1,YC-discovered; 32 jobs
+Momentic,momentic,greenhouse,40,low,1,YC-discovered; 32 jobs
+GoCardless,gocardless,greenhouse,40,low,1,YC-discovered; 31 jobs
+Multiverse,multiverse,ashby,40,low,1,YC-discovered; 30 jobs
+Gridware,gridware,lever,40,low,1,YC-discovered; 30 jobs
+Vapi,vapi,ashby,40,low,1,YC-discovered; 30 jobs
+GOAT Group,goatgroup,greenhouse,40,low,1,YC-discovered; 29 jobs
+Fieldguide,fieldguide,ashby,40,low,1,YC-discovered; 29 jobs
+Onebrief,onebrief,ashby,40,low,1,YC-discovered; 29 jobs
+Stellar,stellar,ashby,40,low,1,YC-discovered; 29 jobs
+Lio (formerly askLio),lio,ashby,40,low,1,YC-discovered; 29 jobs
+Capi Money,capimoney,ashby,40,low,1,YC-discovered; 29 jobs
+Clipboard,clipboard,ashby,40,low,1,YC-discovered; 28 jobs
+Firsthand,firsthand,greenhouse,40,low,1,YC-discovered; 28 jobs
+Adaptyv,adaptyv,ashby,40,low,1,YC-discovered; 28 jobs
+Confido,confido,ashby,40,low,1,YC-discovered; 27 jobs
+Stepful,stepful,ashby,40,low,1,YC-discovered; 27 jobs
+Campfire,campfire,ashby,40,low,1,YC-discovered; 27 jobs
+Kalshi,kalshi,greenhouse,40,low,1,YC-discovered; 26 jobs
+Ditto,ditto,ashby,40,low,1,YC-discovered; 26 jobs
+Roboflow,roboflow,ashby,40,low,1,YC-discovered; 26 jobs
+voize,voize,ashby,40,low,1,YC-discovered; 26 jobs
+Axiom,axiom,greenhouse,40,low,1,YC-discovered; 26 jobs
+Xendit,xendit,greenhouse,40,low,1,YC-discovered; 25 jobs
+Mesh,mesh,greenhouse,40,low,1,YC-discovered; 25 jobs
+AfterQuery,afterquery,ashby,40,low,1,YC-discovered; 25 jobs
+CaptivateIQ,captivateiq,lever,40,low,1,YC-discovered; 24 jobs
+Verse Medical,versemedical,ashby,40,low,1,YC-discovered; 24 jobs
+Pantheon,pantheon,greenhouse,40,low,1,YC-discovered; 24 jobs
+Juicebox,juicebox,ashby,40,low,1,YC-discovered; 24 jobs
+Avoca,avoca,ashby,40,low,1,YC-discovered; 24 jobs
+Nox Metals,nox-metals,ashby,40,low,1,YC-discovered; 24 jobs
+Truebill,truebill,greenhouse,40,low,1,YC-discovered; 23 jobs
+Superside,superside,lever,40,low,1,YC-discovered; 23 jobs
+Vetcove,vetcove,ashby,40,low,1,YC-discovered; 23 jobs
+Promise,promise,ashby,40,low,1,YC-discovered; 23 jobs
+Squad,squad,greenhouse,40,low,1,YC-discovered; 23 jobs
+Heart Aerospace,heartaerospace,greenhouse,40,low,1,YC-discovered; 23 jobs
+Prompt,prompt,ashby,40,low,1,YC-discovered; 23 jobs
+Curri,curri,ashby,40,low,1,YC-discovered; 23 jobs
+Latent,latent,ashby,40,low,1,YC-discovered; 23 jobs
+Echo,echo,ashby,40,low,1,YC-discovered; 23 jobs
+Miso,miso,ashby,40,low,1,YC-discovered; 22 jobs
+ClassDojo,classdojo,ashby,40,low,1,YC-discovered; 22 jobs
+Skyways,skyways,lever,40,low,1,YC-discovered; 22 jobs
+Newfront,newfront,ashby,40,low,1,YC-discovered; 22 jobs
+RevenueCat,revenuecat,ashby,40,low,1,YC-discovered; 22 jobs
+Pair Team,pairteam,greenhouse,40,low,1,YC-discovered; 22 jobs
+Omni,omni,ashby,40,low,1,YC-discovered; 22 jobs
+Turion Space,turion-space,ashby,40,low,1,YC-discovered; 22 jobs
+Numeral,numeral,ashby,40,low,1,YC-discovered; 22 jobs
+Tremendous,tremendous,ashby,40,low,1,YC-discovered; 21 jobs
+H1,h1,lever,40,low,1,YC-discovered; 21 jobs
+Homebase,homebase,ashby,40,low,1,YC-discovered; 21 jobs
+Aspora,aspora,ashby,40,low,1,YC-discovered; 21 jobs
+Retell AI,retell-ai,ashby,40,low,1,YC-discovered; 21 jobs
+Plume,plume,greenhouse,40,low,1,YC-discovered; 21 jobs
+Akido Labs,akidolabs,greenhouse,40,low,1,YC-discovered; 20 jobs
+NanoNets,nanonets,greenhouse,40,low,1,YC-discovered; 20 jobs
+Odeko,odeko,greenhouse,40,low,1,YC-discovered; 20 jobs
+Daybreak Health,daybreakhealth,greenhouse,40,low,1,YC-discovered; 20 jobs
+Abacum,abacum,ashby,40,low,1,YC-discovered; 20 jobs
+Nash,nash,ashby,40,low,1,YC-discovered; 20 jobs
+RADAR,radar,greenhouse,40,low,1,YC-discovered; 19 jobs
+Pyka,pyka,lever,40,low,1,YC-discovered; 19 jobs
+Pine Park Health,pineparkhealth,greenhouse,40,low,1,YC-discovered; 19 jobs
+Playground,playground,ashby,40,low,1,YC-discovered; 19 jobs
+Ophelia,ophelia,greenhouse,40,low,1,YC-discovered; 19 jobs
+Savvy,savvy,ashby,40,low,1,YC-discovered; 19 jobs
+Mable,mable,lever,40,low,1,YC-discovered; 19 jobs
+Firecrawl,firecrawl,ashby,40,low,1,YC-discovered; 19 jobs
+Alloy,alloy,greenhouse,40,low,1,YC-discovered; 19 jobs
+Symphony,symphony,greenhouse,40,low,1,YC-discovered; 19 jobs
+Primer,primer,ashby,40,low,1,YC-discovered; 19 jobs
+OpenWork,openwork,greenhouse,40,low,1,YC-discovered; 19 jobs
+Mattermost,mattermost,greenhouse,40,low,1,YC-discovered; 18 jobs
+Zapier,zapier,ashby,40,low,1,YC-discovered; 18 jobs
+Padlet,padlet,ashby,40,low,1,YC-discovered; 18 jobs
+Alchemy,alchemy,ashby,40,low,1,YC-discovered; 18 jobs
+Gecko Robotics,gecko-robotics,ashby,40,low,1,YC-discovered; 18 jobs
+Snappr,snappr,lever,40,low,1,YC-discovered; 18 jobs
+Observe.AI,observeai,greenhouse,40,low,1,YC-discovered; 18 jobs
+Short Story,shortstory,ashby,40,low,1,YC-discovered; 18 jobs
+Porter,porter,lever,40,low,1,YC-discovered; 18 jobs
+Hive Health,hivehealth,ashby,40,low,1,YC-discovered; 18 jobs
+Layup,layup,lever,40,low,1,YC-discovered; 18 jobs
+Mashgin,mashgin,lever,40,low,1,YC-discovered; 17 jobs
+NimbleRx,nimblerx,lever,40,low,1,YC-discovered; 17 jobs
+Sendbird,sendbird,greenhouse,40,low,1,YC-discovered; 17 jobs
+Groww,groww,greenhouse,40,low,1,YC-discovered; 17 jobs
+Middesk,middesk,ashby,40,low,1,YC-discovered; 17 jobs
+Fuse,fuse,ashby,40,low,1,YC-discovered; 17 jobs
+Shepherd,shepherd,ashby,40,low,1,YC-discovered; 17 jobs
+Proper,proper,lever,40,low,1,YC-discovered; 17 jobs
+Metriport,metriport,ashby,40,low,1,YC-discovered; 17 jobs
+Rescale,rescale,ashby,40,low,1,YC-discovered; 16 jobs
+Qventus,qventus,greenhouse,40,low,1,YC-discovered; 16 jobs
+Swayable,swayable,greenhouse,40,low,1,YC-discovered; 16 jobs
+Humaans,humaans,ashby,40,low,1,YC-discovered; 16 jobs
+Legion Health,legionhealth,ashby,40,low,1,YC-discovered; 16 jobs
+Tennr,tennr,ashby,40,low,1,YC-discovered; 16 jobs
+Prosper,prosper,lever,40,low,1,YC-discovered; 16 jobs
+Hexa,hexa,ashby,40,low,1,YC-discovered; 16 jobs
+Boom,boom,ashby,40,low,1,YC-discovered; 15 jobs
+Pearl,pearl,ashby,40,low,1,YC-discovered; 15 jobs
+Veriff,veriff,greenhouse,40,low,1,YC-discovered; 15 jobs
+FamPay,fampay,lever,40,low,1,YC-discovered; 15 jobs
+Camber,camber,ashby,40,low,1,YC-discovered; 15 jobs
+Quindar,quindar,ashby,40,low,1,YC-discovered; 15 jobs
+Oneleet,oneleet,ashby,40,low,1,YC-discovered; 15 jobs
+Solve Intelligence,solveintelligence,ashby,40,low,1,YC-discovered; 15 jobs
+Langdock,langdock,ashby,40,low,1,YC-discovered; 15 jobs
+Affinity,affinity,greenhouse,40,low,1,YC-discovered; 15 jobs
+Garage,garage,ashby,40,low,1,YC-discovered; 15 jobs
+Hazel,hazel,greenhouse,40,low,1,YC-discovered; 15 jobs
+telli,telli,ashby,40,low,1,YC-discovered; 15 jobs
+Nova Credit,novacredit,greenhouse,40,low,1,YC-discovered; 14 jobs
+Photoroom,photoroom,ashby,40,low,1,YC-discovered; 14 jobs
+Atomic Industries,atomicindustries,ashby,40,low,1,YC-discovered; 14 jobs
+SigNoz,signoz,ashby,40,low,1,YC-discovered; 14 jobs
+Ziina,ziina,ashby,40,low,1,YC-discovered; 14 jobs
+LemFi,lemfi,ashby,40,low,1,YC-discovered; 14 jobs
+Attain,attain,greenhouse,40,low,1,YC-discovered; 14 jobs
+Aurelian,aurelian,ashby,40,low,1,YC-discovered; 14 jobs
+Extend,extend,greenhouse,40,low,1,YC-discovered; 14 jobs
+HockeyStack,hockeystack,ashby,40,low,1,YC-discovered; 14 jobs
+Blacksmith,blacksmith,ashby,40,low,1,YC-discovered; 14 jobs
+Conveo,conveo,ashby,40,low,1,YC-discovered; 14 jobs
+Vibe,vibe,ashby,40,low,1,YC-discovered; 14 jobs
+David AI,david-ai,ashby,40,low,1,YC-discovered; 14 jobs
+Flip,flip,greenhouse,40,low,1,YC-discovered; 13 jobs
+GiveCampus,givecampus,greenhouse,40,low,1,YC-discovered; 13 jobs
+Lattice,lattice,greenhouse,40,low,1,YC-discovered; 13 jobs
+The Athletic,theathletic,lever,40,low,1,YC-discovered; 13 jobs
+Carrot Fertility,carrotfertility,greenhouse,40,low,1,YC-discovered; 13 jobs
+Parker,parker,ashby,40,low,1,YC-discovered; 13 jobs
+Lago,lago,ashby,40,low,1,YC-discovered; 13 jobs
+Bree,bree,ashby,40,low,1,YC-discovered; 13 jobs
+Coast,coast,greenhouse,40,low,1,YC-discovered; 13 jobs
+Posh,posh,ashby,40,low,1,YC-discovered; 13 jobs
+Honeydew,honeydew,ashby,40,low,1,YC-discovered; 13 jobs
+Phonely,phonely,ashby,40,low,1,YC-discovered; 13 jobs
+Auctor,auctor,ashby,40,low,1,YC-discovered; 13 jobs
+Fulcrum,fulcrum,ashby,40,low,1,YC-discovered; 13 jobs
+Sift,sift,ashby,40,low,1,YC-discovered; 12 jobs
+Ginkgo Bioworks,ginkgobioworks,greenhouse,40,low,1,YC-discovered; 12 jobs
+Tovala,tovala,lever,40,low,1,YC-discovered; 12 jobs
+Salt Security,saltsecurity,greenhouse,40,low,1,YC-discovered; 12 jobs
+Pelago,pelago,greenhouse,40,low,1,YC-discovered; 12 jobs
+Titan,titan,ashby,40,low,1,YC-discovered; 12 jobs
+Prodigal,prodigal,greenhouse,40,low,1,YC-discovered; 12 jobs
+Hatch,hatch,ashby,40,low,1,YC-discovered; 12 jobs
+Benepass,benepass,ashby,40,low,1,YC-discovered; 12 jobs
+AtoB,atob,ashby,40,low,1,YC-discovered; 12 jobs
+Topline Pro,topline-pro,ashby,40,low,1,YC-discovered; 12 jobs
+Odys Aviation,odys-aviation,ashby,40,low,1,YC-discovered; 12 jobs
+Float,float,ashby,40,low,1,YC-discovered; 12 jobs
+Pylon,pylon,ashby,40,low,1,YC-discovered; 12 jobs
+Novig,novig,ashby,40,low,1,YC-discovered; 12 jobs
+Kombo,kombo,ashby,40,low,1,YC-discovered; 12 jobs
+Concourse,concourse,ashby,40,low,1,YC-discovered; 12 jobs
+PointOne,pointone,ashby,40,low,1,YC-discovered; 12 jobs
+FurtherAI,furtherai,ashby,40,low,1,YC-discovered; 12 jobs
+ClaimSorted,claimsorted,ashby,40,low,1,YC-discovered; 12 jobs
+Modus,modus,ashby,40,low,1,YC-discovered; 12 jobs
+Eloquent AI,eloquentai,ashby,40,low,1,YC-discovered; 12 jobs
+Icarus,icarus,greenhouse,40,low,1,YC-discovered; 12 jobs
+Cambly,cambly,ashby,40,low,1,YC-discovered; 11 jobs
+Hush,hush,lever,40,low,1,YC-discovered; 11 jobs
+Spellbrush,spellbrush,ashby,40,low,1,YC-discovered; 11 jobs
+Momentus,momentus,greenhouse,40,low,1,YC-discovered; 11 jobs
+Mutiny,mutiny,ashby,40,low,1,YC-discovered; 11 jobs
+Flux,flux,ashby,40,low,1,YC-discovered; 11 jobs
+Luminai,luminai,ashby,40,low,1,YC-discovered; 11 jobs
+Arketa,arketa,ashby,40,low,1,YC-discovered; 11 jobs
+Finch,finch,lever,40,low,1,YC-discovered; 11 jobs
+Bloom,bloom,lever,40,low,1,YC-discovered; 11 jobs
+Sphere,sphere,ashby,40,low,1,YC-discovered; 11 jobs
+Langfuse,langfuse,ashby,40,low,1,YC-discovered; 11 jobs
+Onshore,onshore,greenhouse,40,low,1,YC-discovered; 11 jobs
+Clarion,clarion,ashby,40,low,1,YC-discovered; 11 jobs
+Datacurve,datacurve,ashby,40,low,1,YC-discovered; 11 jobs
+Sensei,sensei,greenhouse,40,low,1,YC-discovered; 11 jobs
+Lucis,lucis,ashby,40,low,1,YC-discovered; 11 jobs
+Sygaldry Technologies,sygaldry-technologies,ashby,40,low,1,YC-discovered; 11 jobs
+GUILD,guild,greenhouse,40,low,1,YC-discovered; 11 jobs
+Zerocater,zerocater,greenhouse,40,low,1,YC-discovered; 10 jobs
+Skip,skip,ashby,40,low,1,YC-discovered; 10 jobs
+Modern Health,modernhealth,greenhouse,40,low,1,YC-discovered; 10 jobs
+Substack,substack,ashby,40,low,1,YC-discovered; 10 jobs
+Emi Labs,emilabs,lever,40,low,1,YC-discovered; 10 jobs
+Teleo,teleo,lever,40,low,1,YC-discovered; 10 jobs
+Glimpse,glimpse,ashby,40,low,1,YC-discovered; 10 jobs
+General Proximity,generalproximity,greenhouse,40,low,1,YC-discovered; 10 jobs
+Vori,vori,ashby,40,low,1,YC-discovered; 10 jobs
+Junction,junction,ashby,40,low,1,YC-discovered; 10 jobs
+Formal,formal,ashby,40,low,1,YC-discovered; 10 jobs
+REGENT,regent,greenhouse,40,low,1,YC-discovered; 10 jobs
+H3X Technologies,h3x-technologies,ashby,40,low,1,YC-discovered; 10 jobs
+Mach9,mach9,ashby,40,low,1,YC-discovered; 10 jobs
+Output Biosciences,output,ashby,40,low,1,YC-discovered; 10 jobs
+Mintlify,mintlify,ashby,40,low,1,YC-discovered; 10 jobs
+Reality Defender,realitydefender,ashby,40,low,1,YC-discovered; 10 jobs
+AiPrise,aiprise,ashby,40,low,1,YC-discovered; 10 jobs
+Infisical,infisical,ashby,40,low,1,YC-discovered; 10 jobs
+Vitalize,vitalize,ashby,40,low,1,YC-discovered; 10 jobs
+Parallel,parallel,greenhouse,40,low,1,YC-discovered; 10 jobs
+Starcloud,starcloud,greenhouse,40,low,1,YC-discovered; 10 jobs
+Vera Health,verahealth,ashby,40,low,1,YC-discovered; 10 jobs
+Osmosis,osmosis,greenhouse,40,low,1,YC-discovered; 10 jobs
+Mercura,mercura,ashby,40,low,1,YC-discovered; 10 jobs
+Reacher,reacher,ashby,40,low,1,YC-discovered; 10 jobs
+Human Archive,humanarchive,ashby,40,low,1,YC-discovered; 10 jobs
+9 Mothers,9-mothers,ashby,40,low,1,YC-discovered; 10 jobs
+Hive,hive,greenhouse,40,low,1,YC-discovered; 9 jobs
+Paystack,paystack,greenhouse,40,low,1,YC-discovered; 9 jobs
+Duffel,duffel,lever,40,low,1,YC-discovered; 9 jobs
+Pronto,pronto,greenhouse,40,low,1,YC-discovered; 9 jobs
+Handoff,handoff,lever,40,low,1,YC-discovered; 9 jobs
+Stable,stable,ashby,40,low,1,YC-discovered; 9 jobs
+Notabene,notabene,ashby,40,low,1,YC-discovered; 9 jobs
+Flint,flint,ashby,40,low,1,YC-discovered; 9 jobs
+CarbonChain,carbonchain,greenhouse,40,low,1,YC-discovered; 9 jobs
+Heron Data,herondata,ashby,40,low,1,YC-discovered; 9 jobs
+Popl,popl,ashby,40,low,1,YC-discovered; 9 jobs
+Prospa,prospa,greenhouse,40,low,1,YC-discovered; 9 jobs
+Tavus,tavus,ashby,40,low,1,YC-discovered; 9 jobs
+Charge Robotics,charge-robotics,ashby,40,low,1,YC-discovered; 9 jobs
+Fleetzero,fleetzero,lever,40,low,1,YC-discovered; 9 jobs
+Happl,happl,ashby,40,low,1,YC-discovered; 9 jobs
+Tendo,tendo,lever,40,low,1,YC-discovered; 9 jobs
+Fleek,fleek,ashby,40,low,1,YC-discovered; 9 jobs
+Unify,unify,lever,40,low,1,YC-discovered; 9 jobs
+Vooma,vooma,ashby,40,low,1,YC-discovered; 9 jobs
+Casca,casca,ashby,40,low,1,YC-discovered; 9 jobs
+Bretton AI,brettonai,ashby,40,low,1,YC-discovered; 9 jobs
+SafetyKit,safetykit,ashby,40,low,1,YC-discovered; 9 jobs
+Artisan,artisan,ashby,40,low,1,YC-discovered; 9 jobs
+Ultra,ultra,ashby,40,low,1,YC-discovered; 9 jobs
+Sphinx,sphinx,ashby,40,low,1,YC-discovered; 9 jobs
+Uplane,uplane,ashby,40,low,1,YC-discovered; 9 jobs
+Weave,weave,greenhouse,40,low,1,YC-discovered; 8 jobs
+Snapdocs,snapdocs,ashby,40,low,1,YC-discovered; 8 jobs
+Backpack,backpack,ashby,40,low,1,YC-discovered; 8 jobs
+Permutive,permutive,ashby,40,low,1,YC-discovered; 8 jobs
+Bankjoy,bankjoy,ashby,40,low,1,YC-discovered; 8 jobs
+Bitmovin,bitmovin,greenhouse,40,low,1,YC-discovered; 8 jobs
+Copia,copia,lever,40,low,1,YC-discovered; 8 jobs
+Pursuit,pursuit,greenhouse,40,low,1,YC-discovered; 8 jobs
+Multiply Labs,multiplylabs,lever,40,low,1,YC-discovered; 8 jobs
+People.ai,people-ai,lever,40,low,1,YC-discovered; 8 jobs
+Embrace,embrace,greenhouse,40,low,1,YC-discovered; 8 jobs
+Airbyte,airbyte,ashby,40,low,1,YC-discovered; 8 jobs
+Belvo,belvo,ashby,40,low,1,YC-discovered; 8 jobs
+Blissway,blissway,ashby,40,low,1,YC-discovered; 8 jobs
+doola,doola,lever,40,low,1,YC-discovered; 8 jobs
+Anima,anima,ashby,40,low,1,YC-discovered; 8 jobs
+Fable,fable,ashby,40,low,1,YC-discovered; 8 jobs
+Parallel Bio,parallel-bio,ashby,40,low,1,YC-discovered; 8 jobs
+Meticulous,meticulous,ashby,40,low,1,YC-discovered; 8 jobs
+Sieve,sieve,ashby,40,low,1,YC-discovered; 8 jobs
+Hubble Network,hubblenetwork,greenhouse,40,low,1,YC-discovered; 8 jobs
+GovDash,govdash,ashby,40,low,1,YC-discovered; 8 jobs
+Salient,salient,ashby,40,low,1,YC-discovered; 8 jobs
+Suger,suger,lever,40,low,1,YC-discovered; 8 jobs
+Resend,resend,ashby,40,low,1,YC-discovered; 8 jobs
+Escape,escape,ashby,40,low,1,YC-discovered; 8 jobs
+Outset,outset,ashby,40,low,1,YC-discovered; 8 jobs
+FleetWorks,fleetworks,ashby,40,low,1,YC-discovered; 8 jobs
+Healthtech 1,healthtech-1,ashby,40,low,1,YC-discovered; 8 jobs
+Tamarind Bio,tamarindbio,ashby,40,low,1,YC-discovered; 8 jobs
+Centralize,centralize,ashby,40,low,1,YC-discovered; 8 jobs
+Codes Health,codes-health,ashby,40,low,1,YC-discovered; 8 jobs
+Kastle,kastle,ashby,40,low,1,YC-discovered; 8 jobs
+Simple AI,simple-ai,ashby,40,low,1,YC-discovered; 8 jobs
+Revi,revi,lever,40,low,1,YC-discovered; 8 jobs
+Solidroad,solidroad,ashby,40,low,1,YC-discovered; 8 jobs
+burnt,burnt,greenhouse,40,low,1,YC-discovered; 8 jobs
+Sazabi,sazabi,ashby,40,low,1,YC-discovered; 8 jobs
+Dispatch,dispatch,ashby,40,low,1,YC-discovered; 8 jobs
+Close,close,ashby,40,low,1,YC-discovered; 7 jobs
+Lob,lob,greenhouse,40,low,1,YC-discovered; 7 jobs
+Modern Treasury,moderntreasury,ashby,40,low,1,YC-discovered; 7 jobs
+Corvus Robotics,corvus-robotics,ashby,40,low,1,YC-discovered; 7 jobs
+Mytos,mytos,lever,40,low,1,YC-discovered; 7 jobs
+Probably Genetic,probablygenetic,ashby,40,low,1,YC-discovered; 7 jobs
+Verto,verto,ashby,40,low,1,YC-discovered; 7 jobs
+Atlas,atlas,ashby,40,low,1,YC-discovered; 7 jobs
+Recidiviz,recidiviz,greenhouse,40,low,1,YC-discovered; 7 jobs
+AIOS,aios,ashby,40,low,1,YC-discovered; 7 jobs
+Thndr,thndr,ashby,40,low,1,YC-discovered; 7 jobs
+Synapticure,synapticure,lever,40,low,1,YC-discovered; 7 jobs
+Atomic,atomic,ashby,40,low,1,YC-discovered; 7 jobs
+Albedo,albedo,greenhouse,40,low,1,YC-discovered; 7 jobs
+Enode,enode,ashby,40,low,1,YC-discovered; 7 jobs
+Blink,blink,ashby,40,low,1,YC-discovered; 7 jobs
+Replo,replo,ashby,40,low,1,YC-discovered; 7 jobs
+Birdie,birdie,ashby,40,low,1,YC-discovered; 7 jobs
+Complete,complete,ashby,40,low,1,YC-discovered; 7 jobs
+Cinder,cinder,ashby,40,low,1,YC-discovered; 7 jobs
+CAPSULE,capsule,ashby,40,low,1,YC-discovered; 7 jobs
+Inkeep,inkeep,ashby,40,low,1,YC-discovered; 7 jobs
+LiteLLM,litellm,ashby,40,low,1,YC-discovered; 7 jobs
+Sweep,sweep,ashby,40,low,1,YC-discovered; 7 jobs
+Gumloop,gumloop,ashby,40,low,1,YC-discovered; 7 jobs
+Aqua Voice,aqua-voice,ashby,40,low,1,YC-discovered; 7 jobs
+Substrate,substrate,ashby,40,low,1,YC-discovered; 7 jobs
+Saturn,saturn,ashby,40,low,1,YC-discovered; 7 jobs
+Clearly AI,clearly-ai,ashby,40,low,1,YC-discovered; 7 jobs
+Usul,usul,ashby,40,low,1,YC-discovered; 7 jobs
+Unusual,unusual,lever,40,low,1,YC-discovered; 7 jobs
+Mosaic,mosaic,ashby,40,low,1,YC-discovered; 7 jobs
+Finto,finto,ashby,40,low,1,YC-discovered; 7 jobs
+Lance,lance,ashby,40,low,1,YC-discovered; 7 jobs
+Superset,superset,greenhouse,40,low,1,YC-discovered; 7 jobs
+Meadow,meadow,ashby,40,low,1,YC-discovered; 6 jobs
+Sage Care,sagecare,ashby,40,low,1,YC-discovered; 6 jobs
+Plane,plane,ashby,40,low,1,YC-discovered; 6 jobs
+Roofr,roofr,greenhouse,40,low,1,YC-discovered; 6 jobs
+AssemblyAI,assemblyai,greenhouse,40,low,1,YC-discovered; 6 jobs
+Evry Health,evry-health,lever,40,low,1,YC-discovered; 6 jobs
+Bunkerhill Health,bunkerhillhealth,ashby,40,low,1,YC-discovered; 6 jobs
+Compound,compound,ashby,40,low,1,YC-discovered; 6 jobs
+Cortex,cortex,greenhouse,40,low,1,YC-discovered; 6 jobs
+Tajir,tajir,ashby,40,low,1,YC-discovered; 6 jobs
+STARK BANK,starkbank,lever,40,low,1,YC-discovered; 6 jobs
+Ansa Biotechnologies,ansabiotechnologies,greenhouse,40,low,1,YC-discovered; 6 jobs
+Lightdash,lightdash,ashby,40,low,1,YC-discovered; 6 jobs
+Skio,skio,lever,40,low,1,YC-discovered; 6 jobs
+SpruceID,spruceid,ashby,40,low,1,YC-discovered; 6 jobs
+Axle Health,axle-health,ashby,40,low,1,YC-discovered; 6 jobs
+Hudu,hudu,ashby,40,low,1,YC-discovered; 6 jobs
+Invert,invert,ashby,40,low,1,YC-discovered; 6 jobs
+Spade,spade,greenhouse,40,low,1,YC-discovered; 6 jobs
+Alma,alma,greenhouse,40,low,1,YC-discovered; 6 jobs
+Blee,blee,ashby,40,low,1,YC-discovered; 6 jobs
+MaverickX,maverickx,lever,40,low,1,YC-discovered; 6 jobs
+Ekho,ekho,ashby,40,low,1,YC-discovered; 6 jobs
+Relace,relace,ashby,40,low,1,YC-discovered; 6 jobs
+Vector,vector,ashby,40,low,1,YC-discovered; 6 jobs
+Automat,automat,ashby,40,low,1,YC-discovered; 6 jobs
+Hyperbound,hyperbound,ashby,40,low,1,YC-discovered; 6 jobs
+Diligent,diligent,greenhouse,40,low,1,YC-discovered; 6 jobs
+Terminal,terminal,ashby,40,low,1,YC-discovered; 6 jobs
+Decoda Health,decodahealth,ashby,40,low,1,YC-discovered; 6 jobs
+Circleback,circleback,ashby,40,low,1,YC-discovered; 6 jobs
+Forge,forge,ashby,40,low,1,YC-discovered; 6 jobs
+Minerva,minerva,ashby,40,low,1,YC-discovered; 6 jobs
+Claim Health,claim-health,ashby,40,low,1,YC-discovered; 6 jobs
+Blue,blue,lever,40,low,1,YC-discovered; 6 jobs
+Mantis,mantis,greenhouse,40,low,1,YC-discovered; 6 jobs
+CircuitHub,circuithub,ashby,40,low,1,YC-discovered; 5 jobs
+Y Combinator,ycombinator,ashby,40,low,1,YC-discovered; 5 jobs
+Zencoder,zencoder,greenhouse,40,low,1,YC-discovered; 5 jobs
+Clever,clever,greenhouse,40,low,1,YC-discovered; 5 jobs
+CareMessage,caremessage,lever,40,low,1,YC-discovered; 5 jobs
+SIRUM,sirum,greenhouse,40,low,1,YC-discovered; 5 jobs
+Tempo,tempo,greenhouse,40,low,1,YC-discovered; 5 jobs
+Seed,seed,greenhouse,40,low,1,YC-discovered; 5 jobs
+Focal Systems,focalsystems,greenhouse,40,low,1,YC-discovered; 5 jobs
+Legalist,legalist,greenhouse,40,low,1,YC-discovered; 5 jobs
+Mednet,mednet,ashby,40,low,1,YC-discovered; 5 jobs
+Universe,universe,ashby,40,low,1,YC-discovered; 5 jobs
+Postscript,postscript,greenhouse,40,low,1,YC-discovered; 5 jobs
+GoLinks,golinks,ashby,40,low,1,YC-discovered; 5 jobs
+Zippi,zippi,lever,40,low,1,YC-discovered; 5 jobs
+Deepnote,deepnote,ashby,40,low,1,YC-discovered; 5 jobs
+LAIKA,laika,greenhouse,40,low,1,YC-discovered; 5 jobs
+Odin,odin,ashby,40,low,1,YC-discovered; 5 jobs
+Paragon,paragon,ashby,40,low,1,YC-discovered; 5 jobs
+Haven,haven,greenhouse,40,low,1,YC-discovered; 5 jobs
+Able,able,greenhouse,40,low,1,YC-discovered; 5 jobs
+Novel,novel,ashby,40,low,1,YC-discovered; 5 jobs
+Kingdom,kingdom,ashby,40,low,1,YC-discovered; 5 jobs
+Verifiable,verifiable,lever,40,low,1,YC-discovered; 5 jobs
+authzed,authzed,ashby,40,low,1,YC-discovered; 5 jobs
+Phoenix,phoenix,ashby,40,low,1,YC-discovered; 5 jobs
+Svix,svix,ashby,40,low,1,YC-discovered; 5 jobs
+Double,double,ashby,40,low,1,YC-discovered; 5 jobs
+Hypercore,hypercore,ashby,40,low,1,YC-discovered; 5 jobs
+Kodex,kodex,ashby,40,low,1,YC-discovered; 5 jobs
+Nira Energy,niraenergy,greenhouse,40,low,1,YC-discovered; 5 jobs
+Zensors,zensors,ashby,40,low,1,YC-discovered; 5 jobs
+Beam,beam,greenhouse,40,low,1,YC-discovered; 5 jobs
+LanceDB,lancedb,ashby,40,low,1,YC-discovered; 5 jobs
+Mercator,mercator,ashby,40,low,1,YC-discovered; 5 jobs
+Thera,thera,ashby,40,low,1,YC-discovered; 5 jobs
+Grai,grai,ashby,40,low,1,YC-discovered; 5 jobs
+Knowtex,knowtex,ashby,40,low,1,YC-discovered; 5 jobs
+Finvest,finvest,ashby,40,low,1,YC-discovered; 5 jobs
+Magic Patterns,magicpatterns,ashby,40,low,1,YC-discovered; 5 jobs
+David,david,greenhouse,40,low,1,YC-discovered; 5 jobs
+Invopop,invopop,ashby,40,low,1,YC-discovered; 5 jobs
+Wallbit,wallbit,ashby,40,low,1,YC-discovered; 5 jobs
+Artie,artie,ashby,40,low,1,YC-discovered; 5 jobs
+Subsets,subsets,ashby,40,low,1,YC-discovered; 5 jobs
+Electric Air,electricair,ashby,40,low,1,YC-discovered; 5 jobs
+Sola,sola,ashby,40,low,1,YC-discovered; 5 jobs
+Greenboard,greenboard,ashby,40,low,1,YC-discovered; 5 jobs
+Mem0,mem0,ashby,40,low,1,YC-discovered; 5 jobs
+Atum Works,atumworks,ashby,40,low,1,YC-discovered; 5 jobs
+Zeit AI,zeit-ai,ashby,40,low,1,YC-discovered; 5 jobs
+Abundant,abundant,ashby,40,low,1,YC-discovered; 5 jobs
+hud,hud,ashby,40,low,1,YC-discovered; 5 jobs
+Sim,sim,ashby,40,low,1,YC-discovered; 5 jobs
+Flai,flai,ashby,40,low,1,YC-discovered; 5 jobs
+Comena,comena,ashby,40,low,1,YC-discovered; 5 jobs
+Solva,solva,ashby,40,low,1,YC-discovered; 5 jobs
+Polymath,polymath,ashby,40,low,1,YC-discovered; 5 jobs
+Ark,ark,greenhouse,40,low,1,YC-discovered; 4 jobs
+Realm,realm,greenhouse,40,low,1,YC-discovered; 4 jobs
+Submittable,submittable,greenhouse,40,low,1,YC-discovered; 4 jobs
+New Story,new-story,ashby,40,low,1,YC-discovered; 4 jobs
+Assembly,assembly,ashby,40,low,1,YC-discovered; 4 jobs
+Outschool,outschool,greenhouse,40,low,1,YC-discovered; 4 jobs
+Thunkable,thunkable,lever,40,low,1,YC-discovered; 4 jobs
+UpKeep,upkeep,greenhouse,40,low,1,YC-discovered; 4 jobs
+Blueberry Pediatrics,blueberrypediatrics,ashby,40,low,1,YC-discovered; 4 jobs
+OpenSea,opensea,ashby,40,low,1,YC-discovered; 4 jobs
+Enveritas,enveritas,greenhouse,40,low,1,YC-discovered; 4 jobs
+Switchboard,switchboard,ashby,40,low,1,YC-discovered; 4 jobs
+Lucid Bots,lucidbots,greenhouse,40,low,1,YC-discovered; 4 jobs
+Sable,sable,ashby,40,low,1,YC-discovered; 4 jobs
+Freshpaint,freshpaint,ashby,40,low,1,YC-discovered; 4 jobs
+Phonic,phonic,ashby,40,low,1,YC-discovered; 4 jobs
+Eternal,eternal,lever,40,low,1,YC-discovered; 4 jobs
+Ello,ello,ashby,40,low,1,YC-discovered; 4 jobs
+Humanly,humanly,ashby,40,low,1,YC-discovered; 4 jobs
+Yotta,yotta,ashby,40,low,1,YC-discovered; 4 jobs
+Ready,ready,ashby,40,low,1,YC-discovered; 4 jobs
+Finary,finary,ashby,40,low,1,YC-discovered; 4 jobs
+LiveFlow,liveflow,ashby,40,low,1,YC-discovered; 4 jobs
+FlutterFlow,flutterflow,ashby,40,low,1,YC-discovered; 4 jobs
+Journey,journey,greenhouse,40,low,1,YC-discovered; 4 jobs
+Epsilon3,epsilon3,lever,40,low,1,YC-discovered; 4 jobs
+Formance,formance,ashby,40,low,1,YC-discovered; 4 jobs
+Luminate,luminate,greenhouse,40,low,1,YC-discovered; 4 jobs
+Aviator,aviator,ashby,40,low,1,YC-discovered; 4 jobs
+Bifrost,bifrost,ashby,40,low,1,YC-discovered; 4 jobs
+Rally UXR,rallyuxr,ashby,40,low,1,YC-discovered; 4 jobs
+Stream,stream,ashby,40,low,1,YC-discovered; 4 jobs
+Julius,julius,ashby,40,low,1,YC-discovered; 4 jobs
+Two Dots,twodots,lever,40,low,1,YC-discovered; 4 jobs
+Bitstack,bitstack,ashby,40,low,1,YC-discovered; 4 jobs
+Pirros,pirros,ashby,40,low,1,YC-discovered; 4 jobs
+Loula,loula,ashby,40,low,1,YC-discovered; 4 jobs
+Warp,warp,greenhouse,40,low,1,YC-discovered; 4 jobs
+Yuma AI,yumaai,ashby,40,low,1,YC-discovered; 4 jobs
+Glade,glade,ashby,40,low,1,YC-discovered; 4 jobs
+Foundation,foundation,ashby,40,low,1,YC-discovered; 4 jobs
+Onyx,onyx,ashby,40,low,1,YC-discovered; 4 jobs
+Understood Care,understoodcare,greenhouse,40,low,1,YC-discovered; 4 jobs
+Doublezero,doublezero,ashby,40,low,1,YC-discovered; 4 jobs
+Anara,anara,ashby,40,low,1,YC-discovered; 4 jobs
+Blaxel,blaxel,ashby,40,low,1,YC-discovered; 4 jobs
+Chestnut,chestnut,ashby,40,low,1,YC-discovered; 4 jobs
+AgentMail,agentmail,ashby,40,low,1,YC-discovered; 4 jobs
+truthsystems,truthsystems,ashby,40,low,1,YC-discovered; 4 jobs
+Idler,idler,ashby,40,low,1,YC-discovered; 4 jobs
+SF Tensor,sf-tensor,ashby,40,low,1,YC-discovered; 4 jobs
+DiligenceSquared,diligencesquared,ashby,40,low,1,YC-discovered; 4 jobs
+Asimov,asimov,ashby,40,low,1,YC-discovered; 4 jobs
+Traverse,traverse,ashby,40,low,1,YC-discovered; 4 jobs
+Constellation Space,constellationspace,ashby,40,low,1,YC-discovered; 4 jobs
+Tilt,tilt,ashby,40,low,1,YC-discovered; 3 jobs
+Quartzy,quartzy,lever,40,low,1,YC-discovered; 3 jobs
+SmartAsset,smartasset,greenhouse,40,low,1,YC-discovered; 3 jobs
+UserGems,usergems,greenhouse,40,low,1,YC-discovered; 3 jobs
+ReadMe,readme,ashby,40,low,1,YC-discovered; 3 jobs
+Shasqi,shasqi,ashby,40,low,1,YC-discovered; 3 jobs
+PickTrace,picktrace,lever,40,low,1,YC-discovered; 3 jobs
+Mux,mux,ashby,40,low,1,YC-discovered; 3 jobs
+Armory,armory,ashby,40,low,1,YC-discovered; 3 jobs
+AON3D,aon3d,greenhouse,40,low,1,YC-discovered; 3 jobs
+Breaker,breaker,ashby,40,low,1,YC-discovered; 3 jobs
+Headstart,headstart,ashby,40,low,1,YC-discovered; 3 jobs
+Grin,grin,greenhouse,40,low,1,YC-discovered; 3 jobs
+Doppler,doppler,ashby,40,low,1,YC-discovered; 3 jobs
+Syncro,syncro,greenhouse,40,low,1,YC-discovered; 3 jobs
+Fathom,fathom,ashby,40,low,1,YC-discovered; 3 jobs
+Seer,seer,greenhouse,40,low,1,YC-discovered; 3 jobs
+Galaxy,galaxy,greenhouse,40,low,1,YC-discovered; 3 jobs
+Slope,slope,ashby,40,low,1,YC-discovered; 3 jobs
+OneSchema,oneschema,ashby,40,low,1,YC-discovered; 3 jobs
+Bolster,bolster,lever,40,low,1,YC-discovered; 3 jobs
+Baubap,baubap,greenhouse,40,low,1,YC-discovered; 3 jobs
+Eventual,eventual,ashby,40,low,1,YC-discovered; 3 jobs
+Windmill,windmill,ashby,40,low,1,YC-discovered; 3 jobs
+Cambio,cambio,ashby,40,low,1,YC-discovered; 3 jobs
+Reflex,reflex,greenhouse,40,low,1,YC-discovered; 3 jobs
+Trigger.dev,triggerdev,ashby,40,low,1,YC-discovered; 3 jobs
+Rollstack,rollstack,ashby,40,low,1,YC-discovered; 3 jobs
+Cosine,cosine,ashby,40,low,1,YC-discovered; 3 jobs
+Clueso,clueso,ashby,40,low,1,YC-discovered; 3 jobs
+Conduit,conduit,ashby,40,low,1,YC-discovered; 3 jobs
+Continue,continue,ashby,40,low,1,YC-discovered; 3 jobs
+Pure,pure,ashby,40,low,1,YC-discovered; 3 jobs
+Shadeform,shadeform,ashby,40,low,1,YC-discovered; 3 jobs
+Feanix Biotechnologies,feanixbiotechnologies,greenhouse,40,low,1,YC-discovered; 3 jobs
+Greptile,greptile,ashby,40,low,1,YC-discovered; 3 jobs
+Tuesday Labs,tuesday-labs,ashby,40,low,1,YC-discovered; 3 jobs
+Brainbase Labs,brainbaselabs,ashby,40,low,1,YC-discovered; 3 jobs
+Conductor,conductor,ashby,40,low,1,YC-discovered; 3 jobs
+Lingo.dev,lingodotdev,ashby,40,low,1,YC-discovered; 3 jobs
+Innate,innate,ashby,40,low,1,YC-discovered; 3 jobs
+Apolink,apolink,ashby,40,low,1,YC-discovered; 3 jobs
+SalesPatriot,salespatriot,ashby,40,low,1,YC-discovered; 3 jobs
+Retrofit,retrofit,greenhouse,40,low,1,YC-discovered; 3 jobs
+Infinite,infinite,ashby,40,low,1,YC-discovered; 3 jobs
+Cedar,cedar,ashby,40,low,1,YC-discovered; 3 jobs
+Prox,prox,ashby,40,low,1,YC-discovered; 3 jobs
+Doe,doe,ashby,40,low,1,YC-discovered; 3 jobs
+Interface,interface,ashby,40,low,1,YC-discovered; 3 jobs
+Fleetline,fleetline,ashby,40,low,1,YC-discovered; 3 jobs
+Stilta,stilta,ashby,40,low,1,YC-discovered; 3 jobs
+Pax Historia,pax-historia,ashby,40,low,1,YC-discovered; 3 jobs
+The Token Company,the-token-company,ashby,40,low,1,YC-discovered; 3 jobs
+Maven,maven,ashby,40,low,1,YC-discovered; 3 jobs
+Juno,juno,greenhouse,40,low,1,YC-discovered; 3 jobs
+BackerKit,backerkit,lever,40,low,1,YC-discovered; 2 jobs
+InfluxData,influxdata,ashby,40,low,1,YC-discovered; 2 jobs
+Aptible,aptible,ashby,40,low,1,YC-discovered; 2 jobs
+Cheddar,cheddar,greenhouse,40,low,1,YC-discovered; 2 jobs
+Reach,reach,greenhouse,40,low,1,YC-discovered; 2 jobs
+"80,000 Hours",80000hours,ashby,40,low,1,YC-discovered; 2 jobs
+Castle,castle,ashby,40,low,1,YC-discovered; 2 jobs
+REZI,rezi,ashby,40,low,1,YC-discovered; 2 jobs
+UpCodes,upcodes,ashby,40,low,1,YC-discovered; 2 jobs
+Prelim,prelim,ashby,40,low,1,YC-discovered; 2 jobs
+Plexus,plexus,lever,40,low,1,YC-discovered; 2 jobs
+Ben,ben,ashby,40,low,1,YC-discovered; 2 jobs
+Caribou,caribou,greenhouse,40,low,1,YC-discovered; 2 jobs
+Cocoon,cocoon,greenhouse,40,low,1,YC-discovered; 2 jobs
+Glide,glide,greenhouse,40,low,1,YC-discovered; 2 jobs
+Prometheus,prometheus,ashby,40,low,1,YC-discovered; 2 jobs
+Dex,dex,ashby,40,low,1,YC-discovered; 2 jobs
+Vorticity,vorticity,ashby,40,low,1,YC-discovered; 2 jobs
+Accord,accord,ashby,40,low,1,YC-discovered; 2 jobs
+Nimbus,nimbus,lever,40,low,1,YC-discovered; 2 jobs
+PostEra,postera,lever,40,low,1,YC-discovered; 2 jobs
+Angle Health,anglehealth,ashby,40,low,1,YC-discovered; 2 jobs
+Momence,momence,greenhouse,40,low,1,YC-discovered; 2 jobs
+PowerUs,powerus,ashby,40,low,1,YC-discovered; 2 jobs
+Farel,farel,ashby,40,low,1,YC-discovered; 2 jobs
+Hotplate,hotplate,ashby,40,low,1,YC-discovered; 2 jobs
+Smartcuts,smartcuts,lever,40,low,1,YC-discovered; 2 jobs
+Faction,faction,ashby,40,low,1,YC-discovered; 2 jobs
+Noble,noble,greenhouse,40,low,1,YC-discovered; 2 jobs
+Simplify,simplify,ashby,40,low,1,YC-discovered; 2 jobs
+TAG,tag,lever,40,low,1,YC-discovered; 2 jobs
+Jupe,jupe,lever,40,low,1,YC-discovered; 2 jobs
+Toku,toku,lever,40,low,1,YC-discovered; 2 jobs
+SkyLink,skylink,ashby,40,low,1,YC-discovered; 2 jobs
+Boostly,boostly,ashby,40,low,1,YC-discovered; 2 jobs
+Nango,nango,ashby,40,low,1,YC-discovered; 2 jobs
+GovEagle,goveagle,ashby,40,low,1,YC-discovered; 2 jobs
+Bluedot,bluedot,ashby,40,low,1,YC-discovered; 2 jobs
+Airgoods,airgoods,ashby,40,low,1,YC-discovered; 2 jobs
+Navier AI,navierai,greenhouse,40,low,1,YC-discovered; 2 jobs
+Tekton Dynamics,tekton-dynamics,ashby,40,low,1,YC-discovered; 2 jobs
+Pivot Robotics,pivotrobotics,ashby,40,low,1,YC-discovered; 2 jobs
+OffDeal,offdeal,ashby,40,low,1,YC-discovered; 2 jobs
+Opencall,opencall,ashby,40,low,1,YC-discovered; 2 jobs
+Focal,focal,ashby,40,low,1,YC-discovered; 2 jobs
+Polar,polar,ashby,40,low,1,YC-discovered; 2 jobs
+Thunder Compute,thundercompute,ashby,40,low,1,YC-discovered; 2 jobs
+Archil,archil,ashby,40,low,1,YC-discovered; 2 jobs
+CTGT,ctgt,ashby,40,low,1,YC-discovered; 2 jobs
+Capy,capy,ashby,40,low,1,YC-discovered; 2 jobs
+Sunset,sunset,greenhouse,40,low,1,YC-discovered; 2 jobs
+Revise Robotics,reviserobotics,ashby,40,low,1,YC-discovered; 2 jobs
+Bild AI,bild-ai,ashby,40,low,1,YC-discovered; 2 jobs
+Harper,harper,ashby,40,low,1,YC-discovered; 2 jobs
+Mastra,mastra,ashby,40,low,1,YC-discovered; 2 jobs
+Butter,butter,ashby,40,low,1,YC-discovered; 2 jobs
+Dedalus Labs,dedalus-labs,ashby,40,low,1,YC-discovered; 2 jobs
+Foresight,foresight,ashby,40,low,1,YC-discovered; 2 jobs
+Opennote,opennote,ashby,40,low,1,YC-discovered; 2 jobs
+KERNEL,kernel,ashby,40,low,1,YC-discovered; 2 jobs
+Cascade,cascade,ashby,40,low,1,YC-discovered; 2 jobs
+Beyond Reach Labs,beyondreachlabs,ashby,40,low,1,YC-discovered; 2 jobs
+Sidekick,sidekick,ashby,40,low,1,YC-discovered; 2 jobs
+Clerky,clerky,ashby,40,low,1,YC-discovered; 1 jobs
+Poll Everywhere,polleverywhere,lever,40,low,1,YC-discovered; 1 jobs
+A Thinking Ape,athinkingape,greenhouse,40,low,1,YC-discovered; 1 jobs
+HealthSherpa,healthsherpa,ashby,40,low,1,YC-discovered; 1 jobs
+SFOX,sfox,greenhouse,40,low,1,YC-discovered; 1 jobs
+Tenjin,tenjin,ashby,40,low,1,YC-discovered; 1 jobs
+Verge Genomics,verge-genomics,ashby,40,low,1,YC-discovered; 1 jobs
+Tetra,tetra,greenhouse,40,low,1,YC-discovered; 1 jobs
+Tesseract,tesseract,greenhouse,40,low,1,YC-discovered; 1 jobs
+BioRender,biorender,lever,40,low,1,YC-discovered; 1 jobs
+Snackpass,snackpass,greenhouse,40,low,1,YC-discovered; 1 jobs
+Meru Health,meruhealth,greenhouse,40,low,1,YC-discovered; 1 jobs
+Papa,papa,greenhouse,40,low,1,YC-discovered; 1 jobs
+Fintual,fintual,lever,40,low,1,YC-discovered; 1 jobs
+Culdesac,culdesac,lever,40,low,1,YC-discovered; 1 jobs
+Beacons,beacons,ashby,40,low,1,YC-discovered; 1 jobs
+Shiru,shiru,lever,40,low,1,YC-discovered; 1 jobs
+Revel,revel,greenhouse,40,low,1,YC-discovered; 1 jobs
+Ladder,ladder,ashby,40,low,1,YC-discovered; 1 jobs
+Fig,fig,ashby,40,low,1,YC-discovered; 1 jobs
+Kinter,kinter,lever,40,low,1,YC-discovered; 1 jobs
+Upflow,upflow,ashby,40,low,1,YC-discovered; 1 jobs
+SEND,send,greenhouse,40,low,1,YC-discovered; 1 jobs
+Datafold,datafold,ashby,40,low,1,YC-discovered; 1 jobs
+Stacker,stacker,ashby,40,low,1,YC-discovered; 1 jobs
+MarcoPolo,marcopolo,lever,40,low,1,YC-discovered; 1 jobs
+Great Question,greatquestion,ashby,40,low,1,YC-discovered; 1 jobs
+Quicknode,quicknode,ashby,40,low,1,YC-discovered; 1 jobs
+Infracost,infracost,ashby,40,low,1,YC-discovered; 1 jobs
+Wabi,wabi,ashby,40,low,1,YC-discovered; 1 jobs
+Pipekit,pipekit,ashby,40,low,1,YC-discovered; 1 jobs
+Nexus,nexus,greenhouse,40,low,1,YC-discovered; 1 jobs
+WarpBuild,warpbuild,ashby,40,low,1,YC-discovered; 1 jobs
+Dots 💸,dots,greenhouse,40,low,1,YC-discovered; 1 jobs
+Malga,malga,ashby,40,low,1,YC-discovered; 1 jobs
+Agave,agave,ashby,40,low,1,YC-discovered; 1 jobs
+Orca,orca,greenhouse,40,low,1,YC-discovered; 1 jobs
+Phase Biolabs,phasebiolabs,ashby,40,low,1,YC-discovered; 1 jobs
+Strong Compute,strongcompute,lever,40,low,1,YC-discovered; 1 jobs
+Remi,remi,greenhouse,40,low,1,YC-discovered; 1 jobs
+Craze,craze,ashby,40,low,1,YC-discovered; 1 jobs
+Raven,raven,greenhouse,40,low,1,YC-discovered; 1 jobs
+Depot,depot,ashby,40,low,1,YC-discovered; 1 jobs
+Coperniq,coperniq,ashby,40,low,1,YC-discovered; 1 jobs
+Keep,keep,ashby,40,low,1,YC-discovered; 1 jobs
+Vellum,vellum,ashby,40,low,1,YC-discovered; 1 jobs
+Metal,metal,ashby,40,low,1,YC-discovered; 1 jobs
+Fortuna Health,fortuna-health,ashby,40,low,1,YC-discovered; 1 jobs
+Newton,newton,greenhouse,40,low,1,YC-discovered; 1 jobs
+Paradigm,paradigm,greenhouse,40,low,1,YC-discovered; 1 jobs
+Arini,arini,ashby,40,low,1,YC-discovered; 1 jobs
+Spur,spur,ashby,40,low,1,YC-discovered; 1 jobs
+Spherecast,spherecast,ashby,40,low,1,YC-discovered; 1 jobs
+Dataleap,dataleap,ashby,40,low,1,YC-discovered; 1 jobs
+Pharos,pharos,ashby,40,low,1,YC-discovered; 1 jobs
+Ryvn,ryvn,ashby,40,low,1,YC-discovered; 1 jobs
+Flowtel,flowtel,ashby,40,low,1,YC-discovered; 1 jobs
+Ambral,ambral,ashby,40,low,1,YC-discovered; 1 jobs
+Golf,golf,greenhouse,40,low,1,YC-discovered; 1 jobs
+Attune,attune,greenhouse,40,low,1,YC-discovered; 1 jobs
+MangoDesk,mangodesk,ashby,40,low,1,YC-discovered; 1 jobs
+CareSwift,careswift,ashby,40,low,1,YC-discovered; 1 jobs
+BootLoop,bootloop,ashby,40,low,1,YC-discovered; 1 jobs
+Fernstone,fernstone,ashby,40,low,1,YC-discovered; 1 jobs
+Hyperspell,hyperspell,ashby,40,low,1,YC-discovered; 1 jobs
+Hypercubic,hypercubic,ashby,40,low,1,YC-discovered; 1 jobs
+Archer,archer,greenhouse,40,low,1,YC-discovered; 1 jobs

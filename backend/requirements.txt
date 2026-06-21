@@ -1,0 +1,23 @@
+# ---- Job Control Center : backend requirements ----
+# Pinned-ish versions known to work together on Python 3.11+.
+# Install with:  pip install -r requirements.txt
+
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+sqlmodel==0.0.22
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# Crawling (Phase 1 only needs requests + bs4; Playwright comes later)
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# Utilities
+python-dateutil==2.9.0.post0
+
+# AI providers. anthropic is required for the on-demand résumé builder + AI
+# notes/letters (falls back to rule-based if no key is set in .env).
+anthropic==0.111.0
+# openai==1.54.4

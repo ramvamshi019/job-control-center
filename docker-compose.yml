@@ -1,0 +1,53 @@
+# ---- Job Control Center : 24/7 cloud stack ----
+# Three long-running services sharing ONE SQLite DB on a named volume.
+# `restart: unless-stopped` is the cloud equivalent of launchd KeepAlive — and a
+# cloud host never sleeps, which is the whole point (no more overnight gaps).
+#
+#   backend    FastAPI API            :8000
+#   livewatch  the 24/7 crawler  <-- the service that must never stop
+#   dashboard  Streamlit UI            :8501
+#
+# First run:  docker compose up -d --build
+# See DEPLOY.md for seeding / uploading the database and securing the ports.
+
+services:
+  backend:
+    build: .
+    working_dir: /app/backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: ./backend/.env
+    environment:
+      - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
+    volumes:
+      - jcc-data:/app/backend/data/db
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  livewatch:
+    build: .
+    working_dir: /app/backend
+    command: python scripts/live_watch.py --interval 60 --batch 600 --workers 24
+    env_file: ./backend/.env
+    environment:
+      - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
+    volumes:
+      - jcc-data:/app/backend/data/db
+    restart: unless-stopped
+    depends_on: [backend]
+
+  dashboard:
+    build: .
+    working_dir: /app
+    command: >
+      streamlit run dashboard/app.py
+      --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    environment:
+      - API_BASE_URL=http://backend:8000
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    depends_on: [backend]
+
+volumes:
+  jcc-data:

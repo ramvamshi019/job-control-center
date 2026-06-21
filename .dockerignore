@@ -1,0 +1,15 @@
+# Keep the build context (and image) small — never copy these in.
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+logs/
+*.log
+*.db
+*.db-wal
+*.db-shm
+exports/
+resumes/generated/
+.DS_Store
+.claude/

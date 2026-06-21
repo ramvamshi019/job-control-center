@@ -1,0 +1,5 @@
+# ---- Job Control Center : dashboard requirements ----
+streamlit==1.40.1
+requests==2.32.3
+pandas==2.2.3
+python-dotenv==1.0.1

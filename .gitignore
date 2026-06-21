@@ -1,0 +1,42 @@
+# ---- Job Control Center : git ignore ----
+# Keeps the repo to source only. The 1.4GB of venv/DB/logs never gets uploaded.
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtualenv — recreate from requirements.txt on the host
+.venv/
+venv/
+env/
+
+# Secrets & local env — use backend/.env.example as the template
+.env
+backend/.env
+
+# SQLite database + WAL/SHM — 900MB+, never commit. Seed fresh or upload separately.
+*.db
+*.db-wal
+*.db-shm
+
+# Logs & runtime artifacts
+logs/
+*.log
+
+# Abandoned per-job AI résumé artifacts (the dropped builder's output)
+resumes/generated/
+
+# Exports — regenerated on demand
+exports/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Claude Code local settings
+.claude/
+
+# NOTE: backend/data/*.csv (seed lists like companies_seed.csv) ARE kept —
+# they're small and needed to seed a fresh deployment.

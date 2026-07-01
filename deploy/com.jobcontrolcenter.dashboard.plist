@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobcontrolcenter.dashboard</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/ramvamshikrishna</string>
+        <key>LANG</key>
+        <string>en_US.UTF-8</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ramvamshikrishna/Desktop/job-control-center/.venv/bin/python</string>
+        <string>-u</string>
+        <string>-m</string>
+        <string>streamlit</string>
+        <string>run</string>
+        <string>/Users/ramvamshikrishna/Desktop/job-control-center/dashboard/app.py</string>
+        <string>--server.port</string>
+        <string>8501</string>
+        <string>--server.headless</string>
+        <string>true</string>
+        <string>--server.fileWatcherType</string>
+        <string>none</string>
+        <string>--browser.gatherUsageStats</string>
+        <string>false</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/tmp</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/jcc_dashboard.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jcc_dashboard.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

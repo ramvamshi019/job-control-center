@@ -38,6 +38,14 @@ Data Engineer with nearly 2 years of professional experience designing scalable 
 - Collaborated with BI teams to deliver curated datasets feeding Tableau and Power BI dashboards used by clinical operations and executive leadership.
 - Worked in Agile/Scrum sprints, participating in sprint planning, code reviews, retrospectives, and stakeholder demos to deliver features iteratively.
 
+## Projects
+### JobJarvis — Automated US Job-Search Data Platform · Mar 2025 – Present
+*Python, FastAPI, SQLModel/SQLite, Streamlit, REST APIs, Anthropic Claude API, Docker*
+- Built a full-stack, 24/7 automated data platform that crawls 20+ applicant tracking systems (Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, BambooHR, and more), ingesting and normalizing ~280,000 US job postings across ~22,000 companies into a FastAPI + SQLite (WAL) backend with a Streamlit analytics dashboard.
+- Engineered concurrent ingestion crawlers (24 worker threads, thread-local HTTP sessions, retry/backoff); diagnosed and fixed ORM session-concurrency bugs that lifted throughput from a few hundred to 17,000+ postings per crawl cycle.
+- Designed a rule-based scoring and filtering engine using Python word-boundary keyword matching to rank roles by skills fit and automatically screen out non-relevant postings.
+- Implemented a posted-date retention/prune policy, a scheduled digest with desktop notifications, and CSV data exports; containerized the services with Docker for cloud deployment.
+
 ## Education
 - **Master of Science in Computer Science** — Missouri State University, Springfield, MO · Dec 2025
 - **Bachelor of Technology in Computer Science** — Koneru Lakshmaiah Education Foundation, India · May 2023

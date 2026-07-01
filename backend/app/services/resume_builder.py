@@ -27,9 +27,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import json
+
 from app.config import settings
 from app.models.job import Job
-from app.services import latex_resume
+from app.services import latex_resume, match_report
 from app.services.resume_tailor import pick_base_resume
 from app.utils.logging import get_logger
 
@@ -150,58 +152,135 @@ def _to_docx(resume_md: str, path: Path) -> bool:
     return True
 
 
-def _ai_build(job: Job, base_text: str) -> str:
-    """Tailor the base résumé to the job via Claude. Returns '' on any problem
-    so callers fall back to the (still-true) base résumé."""
-    prompt = (
-        "You are an expert résumé editor. Tailor the candidate's BASE RÉSUMÉ to the "
-        "job below. This is a strict editing task, not a writing task.\n\n"
+def _build_prompt(job: Job, base_text: str, missing_keywords: list[str]) -> str:
+    missing_line = (
+        "The job asks for these keywords your résumé does NOT yet use: "
+        f"{', '.join(missing_keywords)}. You may weave one in ONLY if that exact skill "
+        "already appears in the base résumé; otherwise leave it out.\n"
+        if missing_keywords else
+        "No specific missing keywords were detected.\n"
+    )
+    return (
+        "You are an expert résumé editor. Tailor the candidate's BASE RÉSUMÉ to the job "
+        "below. This is a strict EDITING task, not a writing task.\n\n"
         "HARD RULES — breaking any of these makes the output unusable:\n"
-        "1. Use ONLY facts present in the base résumé. Never invent or add employers, "
-        "job titles, dates, companies, degrees, metrics, certifications, or skills the "
-        "candidate doesn't already list.\n"
-        "2. Copy contact info, employer names, employment dates, and education EXACTLY "
-        "as written.\n"
+        "1. NEVER introduce a skill, tool, technology, framework, cloud service, "
+        "language, employer, title, date, degree, certification, or metric that is not "
+        "already written in the base résumé. If the job wants React/GCP/Flask/etc. and "
+        "the base résumé doesn't list it, the résumé does NOT get it. No exceptions. "
+        "An honest 80%% beats a fabricated 100%%.\n"
+        "2. Copy contact info, employer names, the candidate's OWN PAST JOB TITLES, "
+        "employment dates, and education EXACTLY as written. NEVER relabel a held role "
+        "to match the target job — a 'Data Engineer' role stays 'Data Engineer'. (The "
+        "personal headline/tagline may be reordered among roles the candidate already lists.)\n"
         "3. You MAY: reorder sections and bullets so the most relevant experience leads; "
         "drop bullets irrelevant to this role; rephrase a real bullet using the job's "
-        "terminology ONLY when that wording still truthfully describes the same work; "
-        "write a 2-3 line professional summary assembled from experience already present.\n"
+        "terminology ONLY when that wording still truthfully describes the SAME work with "
+        "the SAME tools the candidate already used; write a 2-3 line professional summary "
+        "assembled strictly from experience already present.\n"
         "4. Keep the work-authorization line truthful and unchanged in meaning.\n"
-        "5. Output ATS-friendly Markdown: single column, standard section headers "
-        "(Summary, Core Skills, Experience, Education), '-' bullets, no tables, no "
-        "columns, no images, no emojis. Output ONLY the résumé — no preamble or notes.\n\n"
+        "5. PRESERVE THE EXACT MARKDOWN STRUCTURE of the base résumé so it renders "
+        "cleanly: '# Name', the '**Title:** / **Location:** / **Phone:** · **Email:** · "
+        "**LinkedIn:**' header block, '## Section' headers, '### Role — Company · Dates' "
+        "then '*Location*' then '-' bullets. No tables, columns, images, or emojis.\n\n"
+        f"{missing_line}"
+        "Return ONLY a JSON object (no markdown fence, no preamble) with exactly two keys:\n"
+        '  "resume_markdown": the full tailored résumé as a Markdown string,\n'
+        '  "added_keywords": an array of base-résumé keywords you moved into a more '
+        "prominent position for this role (must already exist in the base). Empty array is fine.\n\n"
         f"=== JOB ===\nTitle: {job.title}\nCompany: {job.company_name}\n"
         f"Location: {job.location}\n\nDescription:\n{(job.description or '')[:4000]}\n\n"
         f"=== BASE RÉSUMÉ (the source of truth — every claim must trace back here) ===\n"
         f"{base_text}"
     )
-    try:
-        import anthropic
 
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        msg = client.messages.create(
-            model=settings.resume_model,
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
+
+def _call_claude(prompt: str) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    msg = client.messages.create(
+        model=settings.resume_model,
+        max_tokens=2500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(b.text for b in msg.content if b.type == "text").strip()
+
+
+def _ai_build(job: Job, base_text: str, missing_keywords: list[str]) -> tuple[str, list[str]]:
+    """Tailor the base résumé to the job via Claude, then ENFORCE honesty with a
+    deterministic guard: any hard skill in the output that is not in the base résumé
+    is a fabrication. If the model invents skills, re-prompt once naming them; if it
+    still cheats, fall back to the untouched (100%% true) base. Returns
+    (resume_markdown, added_keywords); ('', []) signals 'use the base'."""
+    allowed = match_report.extract_skills(base_text)
+    prompt = _build_prompt(job, base_text, missing_keywords)
+    try:
+        md, _added = _parse_ai_json(_call_claude(prompt))
+        if not md:
+            return "", []
+        violations = sorted(match_report.extract_skills(md) - allowed)
+        if not violations:
+            return md, []  # clean: no skill exists that isn't in the base
+
+        log.warning("résumé for '%s' invented skills not in base: %s — re-prompting",
+                    job.title, violations)
+        fix = prompt + (
+            "\n\n=== CRITICAL CORRECTION ===\nYour previous output INVENTED these skills "
+            f"that do NOT appear in the base résumé: {', '.join(violations)}. These are "
+            "fabrications and are forbidden. Remove every mention of each (skills lists, "
+            "bullets, summary, project tech lines, headers) and output the corrected JSON."
         )
-        text = "".join(b.text for b in msg.content if b.type == "text").strip()
-        return text
+        md2, _ = _parse_ai_json(_call_claude(fix))
+        if md2 and not (match_report.extract_skills(md2) - allowed):
+            return md2, []
+        log.warning("résumé for '%s' still fabricating after retry; using honest base", job.title)
+        return "", []
     except Exception as exc:  # noqa: BLE001
         log.warning("AI résumé build failed for '%s', falling back to base: %s",
                     job.title, exc)
-        return ""
+        return "", []
 
 
-def build(job: Job) -> tuple[str, bool]:
-    """Return (resume_markdown, used_ai). Falls back to the untouched base
-    résumé (already true) when AI is off or fails."""
+def _parse_ai_json(raw: str) -> tuple[str, list[str]]:
+    """Pull resume_markdown + added_keywords out of the model's reply, tolerating
+    a stray ```json fence or surrounding prose. If the résumé text can't be found,
+    return ('', []) so the caller falls back to the honest base."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    try:
+        obj = json.loads(text)
+        md = (obj.get("resume_markdown") or "").strip()
+        added = [str(k).strip() for k in (obj.get("added_keywords") or []) if str(k).strip()]
+        if md:
+            return md, added
+    except Exception:  # noqa: BLE001 — fall through to a salvage attempt
+        m = re.search(r'"resume_markdown"\s*:\s*"(.*?)"\s*,\s*"added_keywords"', text, re.S)
+        if m:
+            try:
+                md = json.loads('"' + m.group(1) + '"')
+            except Exception:  # noqa: BLE001
+                md = m.group(1).encode().decode("unicode_escape")
+            if md.strip():
+                return md.strip(), []
+    # Last resort: the model ignored JSON and returned the résumé directly.
+    if text.lstrip().startswith("#"):
+        return text, []
+    return "", []
+
+
+def build(job: Job, missing_keywords: list[str] | None = None) -> tuple[str, bool, list[str]]:
+    """Return (resume_markdown, used_ai, added_keywords). Falls back to the
+    untouched base résumé (already true) when AI is off or fails."""
     base = resolve_base(job.title)
     base_text = _load_base(base)
     if settings.resume_ai_enabled and base_text:
-        ai = _ai_build(job, base_text)
+        ai, added = _ai_build(job, base_text, missing_keywords or [])
         if ai:
-            return ai, True
-    return base_text, False
+            return ai, True, added
+    return base_text, False, []
 
 
 def save(job: Job, resume_md: str) -> dict:
@@ -285,14 +364,37 @@ def load_saved(job_id: int) -> dict | None:
     }
 
 
+def match_report_for(job: Job) -> dict:
+    """Jobscan-style skill-coverage report of this job's JD against your master
+    résumé — no AI, no generation. Powers the dashboard's 'before' number and the
+    have/missing keyword lists."""
+    base_text = _load_base(resolve_base(job.title))
+    return match_report.analyze(job.title or "", job.description or "", base_text)
+
+
 def build_and_save(job: Job) -> dict:
-    resume_md, used_ai = build(job)
+    # 1. Score the JD against the base résumé (the honest 'before').
+    base_text = _load_base(resolve_base(job.title))
+    before = match_report.analyze(job.title or "", job.description or "", base_text)
+
+    # 2. Tailor — telling the model exactly which JD keywords are missing so it can
+    #    surface any the candidate's real experience supports (never fabricate).
+    resume_md, used_ai, added = build(job, match_report.missing_for_prompt(before))
     if not resume_md:
         raise RuntimeError(
             "No base résumé found in resumes/ — expected base_data_engineer.md etc."
         )
+
+    # 3. Re-score the tailored résumé (the 'after') so the lift is verifiable.
+    after = match_report.analyze(job.title or "", job.description or "", resume_md)
+
     out = save(job, resume_md)
     out["used_ai"] = used_ai
+    out["added_keywords"] = added
+    out["match_before"] = before["score"]
+    out["match_after"] = after["score"]
+    out["have"] = after["matched"]
+    out["missing"] = after["missing"]
     out["login_free"] = is_login_free(job.source)
     out["base"] = resolve_base(job.title)
     return out

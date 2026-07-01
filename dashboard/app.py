@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime, timezone
 
 import pandas as pd
 import requests
@@ -114,6 +115,37 @@ def competition(source: str):
     return _COMPETITION.get((source or "").lower(), ("unknown", "⚪", 2))
 
 
+def _parse_dt(s):
+    """Parse an ISO timestamp string (naive UTC) → datetime, or None."""
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", ""))
+    except ValueError:
+        return None
+
+
+def posted_today(job: dict) -> bool:
+    """True only when the job's ORIGINAL posting date is *today* (your local
+    day). Deliberately NOT the crawler's discovery/pull time.
+
+    Guard against crawl-time fallbacks: several sources (workday, bamboohr)
+    stamp posted_at = now() when the ATS doesn't expose a real post date, so
+    posted_at ends up microsecond-identical to discovered_at. Those are the pull
+    timestamp masquerading as a post date — we do NOT count them as 'today'.
+    Sources with no post date at all (icims, most smartrecruiters) have
+    posted_at=None and are likewise never flagged."""
+    posted = _parse_dt(job.get("posted_at"))
+    if posted is None:
+        return False
+    disc = _parse_dt(job.get("discovered_at"))
+    if disc is not None and abs((disc - posted).total_seconds()) < 5:
+        return False  # crawl-time fallback stamp, not a real posted date
+    # posted_at is stored as naive UTC; convert to local before comparing dates.
+    posted_local = posted.replace(tzinfo=timezone.utc).astimezone()
+    return posted_local.date() == datetime.now().date()
+
+
 def years_required(row: dict):
     """Smallest 'N years' figure mentioned in the title/description, or None if
     no experience requirement is stated. Mirrors the scoring engine so the
@@ -130,12 +162,41 @@ def set_status(job_id: int, status: str, reason: str = ""):
     api_patch(f"/jobs/{job_id}", payload)
 
 
+# Sources whose apply page can't actually be opened. Himalayas is an aggregator
+# behind Cloudflare — its job page never clears "security verification" in Chrome
+# (verified: even curl gets HTTP 403 + the challenge), and its API only ever hands
+# back himalayas.app URLs, so there's no real employer link to store. For these we
+# route the user to the employer's OWN careers page via search instead of a link
+# that just spins forever.
+_WALLED_HOSTS = ("himalayas.app",)
+
+
+def is_walled(job: dict) -> bool:
+    return any(h in (job.get("job_url") or "") for h in _WALLED_HOSTS)
+
+
+def apply_url(job: dict) -> str:
+    """Best *working* apply link for a job. Falls back to an employer-careers
+    search for Cloudflare-walled aggregator rows; otherwise the raw posting URL."""
+    u = (job.get("job_url") or "").strip()
+    if is_walled(job):
+        from urllib.parse import quote_plus
+        q = quote_plus(f"{job.get('company_name', '')} {job.get('title', '')} careers")
+        return "https://www.google.com/search?q=" + q
+    return u
+
+
 def render_apply_kit(job: dict):
     """Apply panel: open the job, download YOUR real résumé to upload, copy your
     details into the form, and mark it Applied."""
     with st.expander("🚀 Application kit", expanded=True):
         if job.get("job_url"):
-            st.link_button("🚀 Apply — open this job in a new tab", job["job_url"])
+            if is_walled(job):
+                st.link_button("🔎 Apply on employer site (Himalayas is Cloudflare-walled)", apply_url(job))
+                st.caption("ℹ️ This job is listed via **Himalayas**, whose page won't load in Chrome "
+                           "(Cloudflare bot-wall). This opens the employer's own careers page instead.")
+            else:
+                st.link_button("🚀 Apply — open this job in a new tab", apply_url(job))
 
         m = master_resume()
         st.markdown("**1 · Your résumé** — upload this file on the job page:")
@@ -184,8 +245,9 @@ else:
 
 page = st.sidebar.radio(
     "Pages",
-    ["📄 Match My Résumé", "🔎 Find Jobs", "🔥 Fresh (apply now)", "🟢 Live Feed",
-     "Today's Best Jobs", "Need Review", "Approved", "Applied", "Rejected", "Companies", "Stats"],
+    ["🔎 Find Jobs", "🔥 Fresh (apply now)",
+     "🕵️ JobRight Gap", "🟢 Live Feed", "Today's Best Jobs", "Need Review", "Approved",
+     "Applied", "Rejected", "Companies", "Stats"],
 )
 
 # Quick live counter in the sidebar (jobs first seen in the last 24h).
@@ -201,6 +263,15 @@ if st.sidebar.button("📤 Export Approved → CSV"):
 # ---------- reusable job card ----------
 def render_job_card(job: dict, actions=("Approve", "Reject", "Review")):
     with st.container(border=True):
+        # HIGHLIGHT confirmed H-1B sponsors (company has real USCIS sponsor
+        # history). These are the high-yield applications for an F-1.
+        if job.get("sponsor_confirmed") or (job.get("sponsor_score") or 0) >= 50:
+            st.markdown(
+                "<span style='background:#1a7f37;color:#fff;padding:3px 10px;"
+                "border-radius:6px;font-weight:700;font-size:0.8em;'>✅ H-1B SPONSOR"
+                f" · history {job.get('sponsor_score', 0)}</span>",
+                unsafe_allow_html=True,
+            )
         c1, c2 = st.columns([3, 1])
         with c1:
             st.markdown(f"### {job.get('title','(no title)')}")
@@ -211,7 +282,8 @@ def render_job_card(job: dict, actions=("Approve", "Reject", "Review")):
             posted = job.get("posted_at") or "unknown"
             st.caption(f"Posted: {posted} · Source: {job.get('source','')}")
             if job.get("job_url"):
-                st.markdown(f"[🔗 Open job posting]({job['job_url']})")
+                _lbl = "🔎 Apply on employer site" if is_walled(job) else "🔗 Open job posting"
+                st.markdown(f"[{_lbl}]({apply_url(job)})")
         with c2:
             st.metric("Match score", job.get("match_score", 0))
             risk = job.get("sponsorship_risk", "unknown")
@@ -231,13 +303,21 @@ def render_job_card(job: dict, actions=("Approve", "Reject", "Review")):
             with st.expander("✉️ Cover letter draft"):
                 st.text(job["cover_letter"])
 
-        cols = st.columns(len(actions) + 1)
+        cols = st.columns(len(actions) + 2)
         for i, action in enumerate(actions):
             if cols[i].button(action, key=f"{action}_{job['id']}"):
                 mapping = {"Approve": "Approved", "Reject": "Rejected", "Review": "Need Review",
                            "Mark Applied": "Applied", "Follow-up": "Follow-up", "Archive": "Archived"}
                 set_status(job["id"], mapping.get(action, "New"))
                 st.rerun()
+        # Dedicated "I applied" tracker on EVERY card — click after you apply.
+        already = job.get("status") == "Applied"
+        if cols[-2].button("✅ Applied ✓" if already else "✅ I Applied",
+                           key=f"didapply_{job['id']}", disabled=already,
+                           type="secondary" if already else "primary"):
+            set_status(job["id"], "Applied")
+            st.toast("Marked as Applied ✓")
+            st.rerun()
         if cols[-1].button("🚀 Apply", key=f"apply_{job['id']}"):
             st.session_state[f"show_apply_{job['id']}"] = True
 
@@ -246,93 +326,7 @@ def render_job_card(job: dict, actions=("Approve", "Reject", "Review")):
 
 
 # ---------- pages ----------
-if page == "📄 Match My Résumé":
-    st.header("📄 Match My Résumé")
-    st.caption("Upload your résumé → get jobs ranked by how well they fit YOUR skills, "
-               "filtered to your experience level and work-authorization needs.")
-
-    up = st.file_uploader("Upload résumé (PDF, DOCX, or TXT)", type=["pdf", "docx", "txt", "md"])
-
-    c1, c2, c3 = st.columns([2, 2, 2])
-    levels = c1.multiselect("Experience level", ["entry", "mid", "senior"], default=["entry", "mid"],
-                            help="Filters jobs by the experience THEY require.")
-    POSTED_WINDOWS = {"Any time": 0, "Last 24 hours": 24, "Last 3 days": 72,
-                      "Last 7 days": 168, "Last 30 days": 720}
-    posted_window = c2.selectbox("Posted within", list(POSTED_WINDOWS.keys()), index=0,
-                                 help="Only jobs posted in this window (uses the real posting date).")
-    min_skills = c3.slider("Min matching skills", 1, 10, 3)
-
-    c4, c5 = st.columns([2, 4])
-    usa_only = c4.checkbox("🇺🇸 USA only", value=True,
-                           help="Require a US (or remote-US) location.")
-    sponsor_only = c5.checkbox("Sponsor-friendly only", value=True,
-                               help="Hide jobs that require US citizenship / security clearance or explicitly don't sponsor.")
-
-    if up is not None and st.button("🔍 Find my best matches", type="primary"):
-        with st.spinner("Reading your résumé and ranking jobs…"):
-            try:
-                resp = requests.post(
-                    f"{API}/resume/match",
-                    files={"file": (up.name, up.getvalue())},
-                    data={"experience_levels": ",".join(levels) or "entry,mid",
-                          "sponsor_only": str(sponsor_only).lower(),
-                          "usa_only": str(usa_only).lower(),
-                          "posted_within_hours": POSTED_WINDOWS[posted_window],
-                          "min_skills": min_skills, "limit": 100},
-                    timeout=120,
-                )
-                resp.raise_for_status()
-                payload = resp.json()
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Match failed: {exc}")
-                payload = None
-        if payload:
-            st.session_state["resume_match"] = payload
-
-    payload = st.session_state.get("resume_match")
-    if payload:
-        p = payload["profile"]
-        lvl_emoji = {"entry": "🟢 entry", "mid": "🟡 mid", "senior": "🟠 senior"}.get(p["level"], p["level"])
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Skills detected", len(p["skills"]))
-        m2.metric("Experience", lvl_emoji)
-        m3.metric("Needs sponsorship", "Yes" if p["needs_sponsorship"] else "No")
-        m4.metric("Matching jobs", payload["count"])
-        with st.expander(f"Skills read from your résumé ({len(p['skills'])})"):
-            st.write(", ".join(p["skills"]) or "—")
-        if payload.get("note"):
-            st.warning(payload["note"])
-
-        st.subheader(f"Best {min(len(payload['jobs']), 100)} jobs for your résumé")
-        for j in payload["jobs"]:
-            with st.container(border=True):
-                cA, cB = st.columns([3, 1])
-                with cA:
-                    st.markdown(f"### {j['title']}")
-                    st.markdown(f"**{j['company_name']}** · {j.get('location') or '—'} · "
-                                f"_{j['experience_level']}-level_")
-                    st.caption(f"Posted: {(j.get('posted_at') or 'unknown')[:10]} · Source: {j['source']}")
-                    if j.get("job_url"):
-                        st.markdown(f"[🔗 Open job posting]({j['job_url']})")
-                    clabel, cemoji, _ = competition(j.get("source"))
-                    st.write(f"**Matched skills ({j['fit_count']}):** {', '.join(j['matched_skills'])}")
-                with cB:
-                    st.metric("Résumé fit", f"{j['fit_pct']}%")
-                    risk = j.get("sponsorship_risk", "?")
-                    rc = {"low": "🟢", "medium": "🟡", "high": "🟠", "reject": "🔴"}.get(risk, "⚪")
-                    st.markdown(f"**Sponsorship:** {rc} {risk}")
-                    st.markdown(f"**Competition:** {cemoji} {clabel}")
-                bc = st.columns(3)
-                if bc[0].button("Approve", key=f"rm_app_{j['id']}"):
-                    set_status(j["id"], "Approved"); st.rerun()
-                if bc[1].button("Review", key=f"rm_rev_{j['id']}"):
-                    set_status(j["id"], "Need Review"); st.rerun()
-                if bc[2].button("Reject", key=f"rm_rej_{j['id']}"):
-                    set_status(j["id"], "Rejected"); st.rerun()
-    elif up is None:
-        st.info("⬆️ Upload your résumé to see your best-fit jobs. Tip: a PDF export works best.")
-
-elif page == "🔎 Find Jobs":
+if page == "🔎 Find Jobs":
     st.header("🔎 Find Jobs")
     st.caption("Search & filter every US job in the system (rejected ones hidden by default).")
 
@@ -388,14 +382,102 @@ elif page == "🔥 Fresh (apply now)":
     for job in data[:150]:
         render_job_card(job, actions=("Approve", "Review", "Reject"))
 
+elif page == "🕵️ JobRight Gap":
+    st.header("🕵️ JobRight Gap")
+    st.caption("Jobs **JobRight likely never showed you** — niche-ATS postings from "
+               "lesser-known companies that the big boards (LinkedIn/Indeed → JobRight) "
+               "rarely scrape. Apply here for far less competition. Fully automatic, no "
+               "JobRight login.")
+
+    TIERS = {
+        "🟢 Exclusive — JobRight likely MISSED these": "exclusive",
+        "🟡 Likely on JobRight (syndicated)": "likely",
+        "🔴 Common — JobRight surely has these": "common",
+    }
+    c1, c2, c3 = st.columns([3, 2, 2])
+    tier_label = c1.selectbox("Coverage tier", list(TIERS.keys()))
+    tier = TIERS[tier_label]
+    min_score = c2.slider("Min match score", 0, 100, 50, step=5)
+    window = c3.selectbox("Discovered within", ["All", "Last 24 hours", "Last 3 days", "Last 7 days"])
+    whours = {"All": None, "Last 24 hours": 24, "Last 3 days": 72, "Last 7 days": 168}[window]
+    only_sponsors = st.checkbox("✅ Confirmed H-1B sponsors only", value=False)
+
+    params = dict(jobright_tier=tier, min_score=min_score, exclude_rejected=True,
+                  order_by="exclusivity", limit=1000)
+    if whours:
+        params["discovered_within_hours"] = whours
+    data = api_get("/jobs/", **params) or []
+    if only_sponsors:
+        data = [j for j in data if j.get("sponsor_confirmed")]
+    data = [j for j in data if j.get("status") != "Applied"]
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Jobs in this gap", len(data))
+    m2.metric("✅ H-1B sponsors", sum(1 for j in data if j.get("sponsor_confirmed")))
+    m3.metric("🆕 Fresh (<24h)", sum(1 for j in data if (j.get("jobright_exclusivity") or 0) >= 90))
+
+    if not data:
+        st.info("No jobs in this view yet. Loosen the score/recency filters, or let the crawler run.")
+    else:
+        st.caption(f"👉 Sorted by **exclusivity** (how likely JobRight missed it). "
+                   f"Tick **✅ Applied?** to mark + remove a row. {tier_label}.")
+        rows = [{
+            "id": j.get("id"),
+            "applied": False,
+            "edge": j.get("jobright_exclusivity"),
+            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+            "score": j.get("match_score"),
+            "title": j.get("title"),
+            "company": j.get("company_name"),
+            "source": j.get("source"),
+            "location": j.get("location"),
+            "why": j.get("jobright_reason"),
+            "open": apply_url(j),
+        } for j in data]
+        df = pd.DataFrame(rows).set_index("id")
+        editor_key = "gap_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
+        edited = st.data_editor(
+            df, key=editor_key, hide_index=True, use_container_width=True,
+            disabled=["edge", "sponsor", "score", "title", "company", "source",
+                      "location", "why", "open"],
+            column_order=["applied", "edge", "sponsor", "score", "title", "company",
+                          "source", "location", "why", "open"],
+            column_config={
+                "applied": st.column_config.CheckboxColumn(
+                    "✅ Applied?", help="Tick when you've applied — it's marked Applied and drops out."),
+                "edge": st.column_config.ProgressColumn(
+                    "JobRight-miss", help="Confidence JobRight never showed this (higher = better edge).",
+                    min_value=0, max_value=100, format="%d"),
+                "open": st.column_config.LinkColumn("open", display_text="apply ↗"),
+                "score": st.column_config.NumberColumn("score", format="%d"),
+            },
+        )
+        changed = False
+        for jid, r in edited.iterrows():
+            if bool(r["applied"]):
+                set_status(int(jid), "Applied"); changed = True
+        if changed:
+            st.rerun()
+
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")
     st.caption("Newest jobs the crawler has detected. Auto-refreshes so new US jobs appear live.")
 
-    colA, colB = st.columns([2, 2])
+    colA, colB, colC = st.columns([2, 2, 2])
     feed_window = colA.selectbox("Show jobs discovered within", ["Last 24 hours", "Last 3 days", "Last 7 days", "All"])
-    auto = colB.checkbox("🔄 Auto-refresh (every 30s)", value=True)
+    show_filter = colB.selectbox("Show", ["Everything", "Not applied yet", "Applied only"])
+    auto = colC.checkbox("🔄 Auto-refresh (every 30s)", value=True)
     fhours = {"Last 24 hours": 24, "Last 3 days": 72, "Last 7 days": 168, "All": None}[feed_window]
+
+    # Map each job's tracking status to a scannable badge so it's obvious at a
+    # glance what you've already actioned vs. what's still untouched.
+    STATUS_BADGE = {
+        "Applied": "✅ APPLIED",
+        "Follow-up": "📌 Follow-up",
+        "Approved": "👍 Approved",
+        "Need Review": "🔍 Review",
+        "New": "🆕 New",
+    }
 
     @st.fragment(run_every=(30 if auto else None))
     def live_feed():
@@ -403,21 +485,82 @@ elif page == "🟢 Live Feed":
         if fhours:
             params["discovered_within_hours"] = fhours
         data = api_get("/jobs/", **params) or []
-        st.metric("Jobs detected in window", len(data))
+        if show_filter == "Not applied yet":
+            data = [j for j in data if j.get("status") != "Applied"]
+        elif show_filter == "Applied only":
+            data = [j for j in data if j.get("status") == "Applied"]
+        n_applied = sum(1 for j in data if j.get("status") == "Applied")
+        n_today = sum(1 for j in data if posted_today(j))
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Jobs in window", len(data))
+        m2.metric("🔴 Posted today", n_today)
+        m3.metric("✅ Applied", n_applied)
         if not data:
-            st.info("No new jobs in this window yet. The live crawler adds them as it finds them.")
+            st.info("No jobs match this view. The live crawler adds new ones as it finds them.")
             return
         rows = [{
+            "id": j.get("id"),
+            "applied": j.get("status") == "Applied",
+            "🔴": "🔴 TODAY" if posted_today(j) else "",
+            "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
+            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+            "posted": (j.get("posted_at") or "")[:10] or "—",
             "discovered": (j.get("discovered_at") or "")[:19],
             "score": j.get("match_score"),
             "title": j.get("title"),
             "company": j.get("company_name"),
             "location": j.get("location"),
             "risk": j.get("sponsorship_risk"),
-            "url": j.get("job_url"),
+            "open": apply_url(j),  # Himalayas rows → employer-careers search (Cloudflare-walled)
         } for j in data]
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
-                     column_config={"url": st.column_config.LinkColumn("url")})
+        n_sponsor = sum(1 for r in rows if r["sponsor"])
+        st.caption(f"👉 Tick **✅ Applied?** on any row to mark it applied (it drops out of "
+                   f"“Not applied yet”) · **🔴 TODAY** = original posting is dated today "
+                   f"(not the crawler pull) · ✅ H-1B = confirmed sponsor · "
+                   f"{n_sponsor} of {len(rows)} sponsor-confirmed in view")
+
+        df = pd.DataFrame(rows).set_index("id")
+        # Re-key on the visible id-set: when the live crawler reshuffles rows the
+        # editor resets instead of applying a stale tick to a row that moved.
+        editor_key = "live_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
+        edited = st.data_editor(
+            df, key=editor_key, hide_index=True, use_container_width=True,
+            disabled=["🔴", "status", "sponsor", "posted", "discovered", "score",
+                      "title", "company", "location", "risk", "open"],
+            column_order=["applied", "🔴", "status", "sponsor", "posted", "discovered",
+                          "score", "title", "company", "location", "risk", "open"],
+            column_config={
+                "applied": st.column_config.CheckboxColumn(
+                    "✅ Applied?", help="Tick when you've applied — it leaves the "
+                    "“Not applied yet” view and is kept (never pruned)."),
+                "🔴": st.column_config.TextColumn(
+                    "🔴", help="🔴 TODAY = the job's ORIGINAL posting date is today "
+                    "(your local day), not when the crawler pulled it. Blank when the "
+                    "posting is older, or when the source doesn't expose a real post date."),
+                "posted": st.column_config.TextColumn(
+                    "posted", help="Original posting date from the source (— if unknown)."),
+                "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                "score": st.column_config.NumberColumn("score", format="%d"),
+            },
+        )
+
+        # Reconcile the ticks with stored status. Idempotent — only a real change
+        # (newly ticked, or un-ticked an applied one) hits the API.
+        status_by_id = {j.get("id"): j.get("status") for j in data}
+        changed = False
+        for jid, r in edited.iterrows():
+            want = bool(r["applied"])
+            cur = status_by_id.get(jid)
+            if want and cur != "Applied":
+                set_status(int(jid), "Applied"); changed = True
+            elif not want and cur == "Applied":
+                set_status(int(jid), "New"); changed = True
+        if changed:
+            st.rerun()
+
+        if any("himalayas.app" in (j.get("job_url") or "") for j in data):
+            st.caption("ℹ️ **Himalayas** rows open to the employer's own careers page "
+                       "(the Himalayas page is Cloudflare-walled and won't load in Chrome).")
 
     live_feed()
 
@@ -489,9 +632,11 @@ elif page == "Applied":
     if df.empty:
         st.info("Nothing applied yet.")
     else:
-        show = ["title", "company_name", "location", "match_score", "sponsorship_risk", "job_url"]
+        df = df.copy()
+        df["apply"] = df.apply(lambda r: apply_url(r.to_dict()), axis=1)
+        show = ["title", "company_name", "location", "match_score", "sponsorship_risk", "apply"]
         st.dataframe(df[[c for c in show if c in df.columns]], use_container_width=True,
-                     hide_index=True, column_config={"job_url": st.column_config.LinkColumn("job_url")})
+                     hide_index=True, column_config={"apply": st.column_config.LinkColumn("apply", display_text="open ↗")})
         for _, row in df.iterrows():
             render_job_card(row.to_dict(), actions=("Follow-up", "Archive"))
 

@@ -8,6 +8,9 @@ sqlmodel==0.0.22
 pydantic==2.9.2
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
+# Required by FastAPI for Form/File endpoints (resume.py upload route). Without
+# it the backend crashes at import ("Form data requires python-multipart").
+python-multipart==0.0.32
 
 # Crawling (Phase 1 only needs requests + bs4; Playwright comes later)
 requests==2.32.3

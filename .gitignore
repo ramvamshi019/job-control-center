@@ -34,6 +34,7 @@ exports/
 # OS / editor
 .DS_Store
 *.swp
+*.bak
 
 # Claude Code local settings
 .claude/

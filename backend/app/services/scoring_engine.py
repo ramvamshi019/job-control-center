@@ -31,6 +31,33 @@ DATA_ROLE_SIGNALS = [
     "data developer", "bi engineer",
 ]
 
+# Data/backend signals that SPARE a title from the off-domain penalty — so a
+# "Mobile Data Engineer" or "Backend Platform Engineer" stays in your lane, but a
+# bare "Frontend Software Engineer" does not (generic "software engineer" is NOT
+# a sparing signal on purpose).
+BACKEND_SPARING = DATA_ROLE_SIGNALS + [
+    "backend", "back end", "back-end", "platform", "cloud",
+    "infrastructure", "devops", "database",
+]
+
+# Off-domain SPECIALTIES that aren't a Python/SQL/Spark data-or-backend fit. These
+# pass the tech-title gate but should rank well below your real lane (de-ranked,
+# not excluded, so a "Full Stack" role with backend still survives).
+OFF_DOMAIN_SIGNALS = [
+    "front end", "frontend", "front-end", "ui engineer", "ux engineer",
+    "ios", "android", "mobile", "game", "gameplay", "embedded", "firmware",
+    "hardware", "fpga", "asic", "mechanical", "electrical", "rf engineer",
+]
+
+# Your CORE stack — weighted higher than generic skills so a real data/backend
+# match outranks a role that merely name-drops "git"/"docker".
+CORE_SKILLS = [
+    "python", "sql", "pl/sql", "spark", "pyspark", "spark sql", "spark streaming",
+    "hadoop", "hive", "hdfs", "scala", "etl", "elt", "airflow", "kafka",
+    "snowflake", "databricks", "redshift", "bigquery", "dbt", "pandas",
+    "postgresql", "data warehouse", "data pipeline",
+]
+
 JUNIOR_SIGNALS = [
     "junior", "entry level", "entry-level", "new grad", "new graduate",
     "recent graduate", "associate", "early career",
@@ -55,7 +82,10 @@ def _contains_any(text: str, words: List[str]) -> bool:
 
 def _role_match(title: str) -> bool:
     return _contains_any(title, settings.target_roles_list) or _contains_any(
-        title, ["data engineer", "cloud engineer", "software engineer", "developer", "etl"]
+        title,
+        ["data engineer", "cloud engineer", "software engineer", "developer",
+         "etl", "backend", "back end", "back-end", "platform engineer",
+         "data analyst", "analytics engineer"],
     )
 
 
@@ -109,14 +139,20 @@ def score(job: Job, company: Optional[Company] = None) -> Tuple[int, str]:
         total += 15
         reasons.append("+15 junior/entry signal")
 
-    # Count-weighted skills: the MORE of your skills a JD names, the better the
-    # fit. +4 per distinct skill, capped at 24 (so a 6-skill match clearly
-    # outranks a 1-skill match instead of both getting a flat +15).
+    # Count-weighted skills, with your CORE data/backend stack worth more (+5)
+    # than generic tokens (+3). A role naming NONE of your skills loses points
+    # instead of riding a bare title match.
     matched = _skills_matched(desc)
     if matched:
-        pts = min(24, 4 * len(matched))
+        core = [s for s in matched if s in CORE_SKILLS]
+        other = [s for s in matched if s not in CORE_SKILLS]
+        pts = min(30, 5 * len(core) + 3 * len(other))
         total += pts
-        reasons.append(f"+{pts} skills match x{len(matched)} ({', '.join(matched[:6])})")
+        reasons.append(
+            f"+{pts} skills x{len(matched)} ({len(core)} core: {', '.join((core or other)[:5])})")
+    else:
+        total -= 8
+        reasons.append("-8 no overlap with your skill stack")
 
     hrs = hours_since(job.posted_at)
     if hrs is not None and hrs <= 72:
@@ -153,6 +189,13 @@ def score(job: Job, company: Optional[Company] = None) -> Tuple[int, str]:
     if _contains_any(title, SENIOR_SIGNALS):
         total -= 40
         reasons.append("-40 looks mid/senior")
+
+    # Off-domain specialty (frontend / mobile / embedded / hardware …) that isn't
+    # a data-or-backend fit — de-rank (not exclude) unless the title also names a
+    # data/backend/cloud signal.
+    if _contains_any(title, OFF_DOMAIN_SIGNALS) and not _contains_any(title, BACKEND_SPARING):
+        total -= 20
+        reasons.append("-20 off-domain specialty (not data/backend)")
 
     if _contains_any(desc, CLEARANCE_SIGNALS):
         total -= 50

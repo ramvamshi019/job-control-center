@@ -27,6 +27,22 @@ TITLE_BLOCK = [
     "director", "architect", "head of", "head,", "vp ", "vice president",
 ]
 
+# ---- Level too senior for a 0–3yr candidate. "II" and below pass; "III"/"IV"
+# (typically 5–8 yrs) do not. Matched as whole tokens (term_in) so "iii" can't
+# hit inside another word, and "ii" is never blocked.
+SENIOR_LEVEL = ["iii", "iv", "level 3", "level 4", "level iii", "level iv"]
+
+# ---- Internships / co-ops — Ram wants full-time roles, not interns. ----
+INTERN_SIGNALS = ["intern", "internship", "co-op", "coop"]
+
+# ---- OPT/CPT "training & placement" body-shop listings — not real jobs.
+# (e.g. "Java/UI/OBIEE/ETL training opportunity for OPT", "OBIEE/ETL job for
+# OPT/CPT".) These crammed-tech bench listings flood in from staffing shells.
+SCAM_SIGNALS = [
+    "training and placement", "training & placement", "training/placement",
+    "opt/cpt", "opt / cpt", "cpt/opt", "opt and cpt", "opt & cpt", "bench sales",
+]
+
 # ---- Description kill-phrases: citizenship / clearance / no-sponsorship ----
 DESC_BLOCK = [
     "us citizen required", "u.s. citizen required", "must be a us citizen",
@@ -304,6 +320,25 @@ def evaluate(job: Job) -> FilterResult:
         if kw in title:
             return FilterResult(False, f"Title contains blocked term: '{kw.strip()}'")
 
+    # 1a) Level too senior (III/IV). "II" and below are fine for a 0–3yr fit.
+    for kw in SENIOR_LEVEL:
+        if term_in(title, kw):
+            return FilterResult(False, f"Level too senior: '{kw}'")
+
+    # 1a2) Internships are INCLUDED per Ram's request (he wants intern jobs too).
+
+    # 1a3) OPT/CPT "training & placement" bench-shop listings (title or desc),
+    # plus the "<crammed techs> training opportunity for OPT" pattern.
+    for kw in SCAM_SIGNALS:
+        if kw in title or kw in desc:
+            return FilterResult(False, f"OPT-bench/training-placement listing: '{kw}'")
+    # "...training" + OPT/CPT/placement, OR a crammed slash-separated tech list
+    # ("ETL Informatica/Networking/Salesforce/Devops training") — the body-shop
+    # tell. Boeing's "Rotorcraft Training Systems" (0 slashes) is spared.
+    if "training" in title and (term_in(title, "opt") or term_in(title, "cpt")
+                                or "placement" in title or title.count("/") >= 2):
+        return FilterResult(False, "OPT-bench training/placement listing")
+
     # 1b) Non-technical roles (explicit blocklist backstop).
     for kw in NON_TECH_TITLE:
         if term_in(title, kw.strip()):
@@ -314,8 +349,9 @@ def evaluate(job: Job) -> FilterResult:
     if not looks_tech(title):
         return FilterResult(False, "Not a target tech role")
 
-    # 2) Employment-type block (contract/part-time/temp/intern).
-    bad_types = ["contract", "c2c", "part-time", "part time", "temporary", "intern", "1099"]
+    # 2) Employment-type block. Internships are ALLOWED now (Ram wants intern
+    # jobs) — "intern" removed. Contract/C2C/part-time/temp still blocked.
+    bad_types = ["contract", "c2c", "part-time", "part time", "temporary", "1099"]
     for bt in bad_types:
         if bt in etype:
             return FilterResult(False, f"Employment type blocked: '{etype}'")

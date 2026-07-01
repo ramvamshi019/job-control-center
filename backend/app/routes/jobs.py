@@ -16,8 +16,10 @@ from sqlmodel import Session, or_, select
 
 from app.config import settings
 from app.database import get_session
+from app.models.company import Company
 from app.models.job import JOB_STATUSES, Job
 from app.services import cover_letter as cover_letter_service
+from app.services import jobright_radar
 from app.services import resume_builder as resume_builder_service
 from app.services import resume_tailor as resume_service
 
@@ -31,7 +33,7 @@ class JobStatusUpdate(BaseModel):
     cover_letter: Optional[str] = None
 
 
-@router.get("/", response_model=List[Job])
+@router.get("/")
 def list_jobs(
     session: Session = Depends(get_session),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -43,12 +45,20 @@ def list_jobs(
     discovered_within_hours: Optional[int] = Query(
         None, description="Only jobs first SEEN by the crawler within the last N hours"),
     exclude_rejected: bool = Query(False, description="Hide Rejected jobs (US-only survivors)"),
-    order_by: str = Query("score", description="score | posted | discovered"),
+    jobright_tier: Optional[str] = Query(
+        None, description="Filter by JobRight-coverage tier: exclusive | likely | common"),
+    order_by: str = Query("score", description="score | posted | discovered | exclusivity"),
     limit: int = Query(200, le=1000),
 ):
     stmt = select(Job).where(Job.match_score >= min_score)
     if status:
         stmt = stmt.where(Job.status == status)
+    # Pre-narrow by source when a JobRight tier is requested (the dominant
+    # signal); the exact tier is confirmed per-row after enrichment below.
+    if jobright_tier:
+        _tier_sources = jobright_radar.sources_for_tier(jobright_tier)
+        if _tier_sources:
+            stmt = stmt.where(Job.source.in_(_tier_sources))
     if exclude_rejected:
         stmt = stmt.where(Job.status != "Rejected")
     if sponsorship_risk:
@@ -72,7 +82,49 @@ def list_jobs(
     else:
         stmt = stmt.order_by(Job.match_score.desc())
     stmt = stmt.limit(limit)
-    return session.exec(stmt).all()
+    jobs = session.exec(stmt).all()
+
+    # Enrich each job with its company's H-1B sponsor score so the dashboard can
+    # HIGHLIGHT confirmed sponsors (score >= 50). One extra query, batched.
+    cids = {j.company_id for j in jobs if j.company_id}
+    scores: dict[int, int] = {}
+    counts: dict[int, int] = {}
+    if cids:
+        for cid, sc in session.exec(
+            select(Company.id, Company.h1b_history_score).where(Company.id.in_(cids))
+        ).all():
+            scores[cid] = sc or 0
+        # Total postings per company = "footprint" for the JobRight estimate.
+        from sqlalchemy import func
+        for cid, n in session.exec(
+            select(Job.company_id, func.count(Job.id))
+            .where(Job.company_id.in_(cids))
+            .group_by(Job.company_id)
+        ).all():
+            counts[cid] = n
+    now = datetime.utcnow()
+    out = []
+    for j in jobs:
+        d = j.model_dump()
+        d["sponsor_score"] = scores.get(j.company_id, 0)
+        d["sponsor_confirmed"] = d["sponsor_score"] >= 50
+        d.update(jobright_radar.classify(
+            source=j.source,
+            company_name=j.company_name,
+            company_job_count=counts.get(j.company_id, 0),
+            sponsor_score=d["sponsor_score"],
+            discovered_at=j.discovered_at,
+            now=now,
+        ))
+        out.append(d)
+
+    # Confirm the exact tier per-row (source pre-filter is only an approximation)
+    # and surface the strongest edges first.
+    if jobright_tier:
+        out = [d for d in out if d["jobright_tier"] == jobright_tier]
+    if order_by == "exclusivity" or jobright_tier:
+        out.sort(key=lambda d: (d["jobright_exclusivity"], d["match_score"]), reverse=True)
+    return out
 
 
 @router.get("/{job_id}", response_model=Job)
@@ -138,6 +190,17 @@ def build_resume(job_id: int, session: Session = Depends(get_session)):
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(500, f"Résumé build failed: {exc}")
     return result
+
+
+@router.get("/{job_id}/match-report")
+def job_match_report(job_id: int, session: Session = Depends(get_session)):
+    """Jobscan-style skill-coverage report of this job vs your master résumé.
+    Fast (no AI): returns {score, matched, missing, jd_skills, counts, title_match}.
+    Use it to triage which jobs are worth building a tailored résumé for."""
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return resume_builder_service.match_report_for(job)
 
 
 @router.get("/{job_id}/resume")

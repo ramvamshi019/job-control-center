@@ -21,7 +21,10 @@ services:
     volumes:
       - jcc-data:/app/backend/data/db
     ports:
-      - "8000:8000"
+      # localhost-only: the API has no auth and Docker bypasses ufw. Reach it
+      # via SSH tunnel, never the public internet. (dashboard talks to it over
+      # the internal docker network, so it needs no public port at all.)
+      - "127.0.0.1:8000:8000"
     restart: unless-stopped
 
   livewatch:
@@ -45,7 +48,9 @@ services:
     environment:
       - API_BASE_URL=http://backend:8000
     ports:
-      - "8501:8501"
+      # localhost-only: no login on the dashboard. Access via SSH tunnel:
+      #   ssh -L 8501:localhost:8501 root@<vps-ip>  → open http://localhost:8501
+      - "127.0.0.1:8501:8501"
     restart: unless-stopped
     depends_on: [backend]
 

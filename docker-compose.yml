@@ -45,6 +45,7 @@ services:
     command: >
       streamlit run dashboard/app.py
       --server.port 8501 --server.address 0.0.0.0 --server.headless true
+      --server.enableCORS false --server.enableXsrfProtection false
     environment:
       - API_BASE_URL=http://backend:8000
     ports:

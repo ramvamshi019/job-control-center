@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlmodel import Session, or_, select
 
 from app.config import settings
@@ -215,23 +216,32 @@ def get_saved_resume(job_id: int):
 
 @router.get("/stats/summary")
 def stats_summary(session: Session = Depends(get_session)):
-    jobs = session.exec(select(Job)).all()
-    by_status: dict = {}
-    by_source: dict = {}
-    by_company: dict = {}
-    rejection_reasons: dict = {}
-    for j in jobs:
-        by_status[j.status] = by_status.get(j.status, 0) + 1
-        by_source[j.source] = by_source.get(j.source, 0) + 1
-        by_company[j.company_name] = by_company.get(j.company_name, 0) + 1
-        if j.status == "Rejected" and j.rejection_reason:
-            rejection_reasons[j.rejection_reason] = rejection_reasons.get(j.rejection_reason, 0) + 1
+    # Aggregate in SQL — never materialize every Job row (253k rows with big
+    # description text would exhaust memory / time out on a small host).
+    total = session.exec(select(func.count()).select_from(Job)).one()
+    above = session.exec(
+        select(func.count()).select_from(Job).where(Job.match_score >= settings.min_good_score)
+    ).one()
+    by_status = dict(session.exec(select(Job.status, func.count()).group_by(Job.status)).all())
+    by_source = dict(session.exec(
+        select(Job.source, func.count()).group_by(Job.source)
+        .order_by(func.count().desc()).limit(10)
+    ).all())
+    by_company = dict(session.exec(
+        select(Job.company_name, func.count()).group_by(Job.company_name)
+        .order_by(func.count().desc()).limit(10)
+    ).all())
+    rejection_reasons = dict(session.exec(
+        select(Job.rejection_reason, func.count())
+        .where(Job.status == "Rejected", Job.rejection_reason.is_not(None))
+        .group_by(Job.rejection_reason).order_by(func.count().desc()).limit(10)
+    ).all())
     return {
-        "total_jobs": len(jobs),
+        "total_jobs": total,
         "good_threshold": settings.min_good_score,
-        "above_threshold": sum(1 for j in jobs if j.match_score >= settings.min_good_score),
+        "above_threshold": above,
         "by_status": by_status,
-        "top_sources": dict(sorted(by_source.items(), key=lambda x: -x[1])[:10]),
-        "top_companies": dict(sorted(by_company.items(), key=lambda x: -x[1])[:10]),
-        "common_rejection_reasons": dict(sorted(rejection_reasons.items(), key=lambda x: -x[1])[:10]),
+        "top_sources": by_source,
+        "top_companies": by_company,
+        "common_rejection_reasons": rejection_reasons,
     }

@@ -30,7 +30,10 @@ services:
   livewatch:
     build: .
     working_dir: /app/backend
-    command: python scripts/live_watch.py --interval 60 --batch 600 --workers 24
+    # Tuned for a 2-vCPU VPS: fewer workers / smaller batch / longer interval so
+    # the crawler doesn't saturate CPU + the SQLite writer and starve the API.
+    # (On an 8+ core machine you can push this much harder — was 24/600/60.)
+    command: python scripts/live_watch.py --interval 90 --batch 250 --workers 6
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db

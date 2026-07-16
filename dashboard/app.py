@@ -246,7 +246,8 @@ else:
 page = st.sidebar.radio(
     "Pages",
     ["🔎 Find Jobs", "🔥 Fresh (apply now)",
-     "🕵️ JobRight Gap", "🟢 Live Feed", "Today's Best Jobs", "Need Review", "Approved",
+     "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
+     "Need Review", "Approved",
      "Applied", "Rejected", "Companies", "Stats"],
 )
 
@@ -458,6 +459,89 @@ elif page == "🕵️ JobRight Gap":
                 set_status(int(jid), "Applied"); changed = True
         if changed:
             st.rerun()
+
+elif page == "🔴 Posted Today":
+    st.header("🔴 Posted Today")
+    st.caption("ONLY jobs whose original posting date is **today** (your local day) — not the "
+               "crawler's pull time. Citizenship-required and clearance-required roles are "
+               "excluded automatically. Auto-refreshes every 20s on its own, so new postings "
+               "appear live without touching anything.")
+
+    STATUS_BADGE = {
+        "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
+        "Need Review": "🔍 Review", "New": "🆕 New",
+    }
+    hide_applied = st.checkbox("Hide jobs I've already applied to", value=True)
+
+    @st.fragment(run_every=20)
+    def posted_today_feed():
+        # Pull recent-by-posted-date, exclude_rejected drops citizenship/clearance
+        # (the sponsorship engine auto-rejects those). posted_within_hours is a wide
+        # net; posted_today() then keeps only real calendar-today postings and strips
+        # the workday/bamboohr crawl-time fallback stamps.
+        params = dict(order_by="posted", posted_within_hours=48,
+                      exclude_rejected=True, limit=400)
+        data = api_get("/jobs/", **params) or []
+        data = [j for j in data if posted_today(j)]
+        if hide_applied:
+            data = [j for j in data if j.get("status") != "Applied"]
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("🔴 Posted today", len(data))
+        m2.metric("✅ H-1B sponsors", sum(1 for j in data if j.get("sponsor_confirmed")))
+        m3.metric("🆕 New (strong match)", sum(1 for j in data if j.get("status") == "New"))
+        if not data:
+            st.info("Nothing posted today yet in the sponsor-safe set. This auto-updates — "
+                    "new postings will pop in as the crawler finds them.")
+            return
+
+        rows = [{
+            "id": j.get("id"),
+            "applied": j.get("status") == "Applied",
+            "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
+            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+            "posted": (j.get("posted_at") or "")[:10] or "—",
+            "score": j.get("match_score"),
+            "title": j.get("title"),
+            "company": j.get("company_name"),
+            "location": j.get("location"),
+            "risk": j.get("sponsorship_risk"),
+            "open": apply_url(j),
+        } for j in data]
+        n_sponsor = sum(1 for r in rows if r["sponsor"])
+        st.caption(f"👉 Tick **✅ Applied?** to mark a job applied · ✅ H-1B = confirmed "
+                   f"sponsor · {n_sponsor} of {len(rows)} sponsor-confirmed in view")
+
+        df = pd.DataFrame(rows).set_index("id")
+        editor_key = "today_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
+        edited = st.data_editor(
+            df, key=editor_key, hide_index=True, use_container_width=True,
+            disabled=["status", "sponsor", "posted", "score", "title", "company",
+                      "location", "risk", "open"],
+            column_order=["applied", "status", "sponsor", "posted", "score", "title",
+                          "company", "location", "risk", "open"],
+            column_config={
+                "applied": st.column_config.CheckboxColumn(
+                    "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
+                "posted": st.column_config.TextColumn(
+                    "posted", help="Original posting date from the source."),
+                "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                "score": st.column_config.NumberColumn("score", format="%d"),
+            },
+        )
+        status_by_id = {j.get("id"): j.get("status") for j in data}
+        changed = False
+        for jid, r in edited.iterrows():
+            want = bool(r["applied"])
+            cur = status_by_id.get(jid)
+            if want and cur != "Applied":
+                set_status(int(jid), "Applied"); changed = True
+            elif not want and cur == "Applied":
+                set_status(int(jid), "New"); changed = True
+        if changed:
+            st.rerun()
+
+    posted_today_feed()
 
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")

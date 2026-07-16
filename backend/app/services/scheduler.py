@@ -44,8 +44,12 @@ log = get_logger("scheduler")
 # "high" is the fast watchlist (confirmed H-1B sponsors) — re-checked every
 # 20 min so a new posting shows up within ~20 min, not a day.
 PRIORITY_INTERVALS = {
-    "high": timedelta(minutes=15),   # confirmed-sponsor watchlist: re-check every 15 min
-    "medium": timedelta(hours=3),
+    # high was 15 min, but 3,881 high companies * 4/hr = ~15k scans/hr demand vs
+    # ~2.5k/hr capacity on the 2GB box -> the high lane saturated the batch and
+    # starved the 18k low companies (weeks stale). 3h keeps good-fit companies
+    # fresh (8x/day) while leaving capacity to sweep every company within ~24h.
+    "high": timedelta(hours=3),      # confirmed-sponsor / good-fit watchlist
+    "medium": timedelta(hours=6),
     "low": timedelta(hours=24),
     "skip": None,  # never
 }

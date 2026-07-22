@@ -27,6 +27,7 @@ from collections import Counter
 
 sys.path.insert(0, "/app/backend")
 
+from sqlalchemy import func
 from sqlmodel import select
 
 from app.config import settings
@@ -56,9 +57,16 @@ def main() -> int:
         stmt = select(Job).where(Job.status.in_(statuses))
         if args.reason:
             stmt = stmt.where(Job.rejection_reason.contains(args.reason))
-        jobs = s.exec(stmt).all()
-        print(f"re-evaluating {len(jobs)} rejected jobs", flush=True)
+        # STREAM, don't materialise. Loading every matching Job into a list
+        # pulled ~444k rows (descriptions included) into Python and drove a 2GB
+        # box into swap exhaustion and an OOM kill. yield_per keeps only a
+        # window of rows resident.
+        total = s.exec(select(func.count()).select_from(Job)
+                       .where(Job.status.in_(statuses))).one()
+        print(f"re-evaluating {total} jobs (streamed)", flush=True)
+        jobs = s.exec(stmt.execution_options(yield_per=CHUNK))
 
+        # ~23k small rows — fine to hold, unlike the jobs table.
         companies = {c.id: c for c in s.exec(select(Company)).all()}
         promoted, still, routes = 0, Counter(), Counter()
 
@@ -100,7 +108,7 @@ def main() -> int:
             # needs it back between batches.
             if not args.dry_run and promoted % CHUNK == 0:
                 s.commit()
-                print(f"  ...{i}/{len(jobs)} scanned, {promoted} promoted", flush=True)
+                print(f"  ...{i}/{total} scanned, {promoted} promoted", flush=True)
 
         print(f"\npromoted    : {promoted}")
         print(f"demoted     : {demoted}  (were visible, now fail current rules)")

@@ -57,7 +57,13 @@ class GreenhouseCrawler(BaseCrawler):
         location = ((raw.get("location") or {}).get("name") or "").strip()
         job_url = raw.get("absolute_url") or ""
         description = truncate(clean_html(raw.get("content") or ""))
-        posted_at = parse_date(raw.get("updated_at") or raw.get("first_published"))
+        # first_published FIRST. `updated_at` is the last time anyone *edited* the
+        # posting, and recruiters re-touch old reqs constantly — reading it made
+        # 2-year-old jobs show up as "posted today" (measured: 62% of greenhouse
+        # jobs JCC called fresh were older than 2 weeks, 43% older than 60 days;
+        # worst was 778 days). Both fields come back in the same list response, so
+        # preferring the real publish date costs no extra requests.
+        posted_at = parse_date(raw.get("first_published") or raw.get("updated_at"))
 
         # employment_type isn't always present; infer lightly from metadata.
         employment_type = ""

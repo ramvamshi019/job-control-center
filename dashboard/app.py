@@ -563,13 +563,35 @@ elif page == "🔴 Posted Today":
 
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")
-    st.caption("Newest jobs the crawler has detected. Auto-refreshes so new US jobs appear live.")
+    st.caption("Newest jobs the crawler has detected, **ranked best-match first** and grouped "
+               "into experience sections. This is the only page that shows Workday/iCIMS roles "
+               "— they never expose a real posting date, so they can't appear in Posted Today.")
 
     colA, colB, colC = st.columns([2, 2, 2])
     feed_window = colA.selectbox("Show jobs discovered within", ["Last 24 hours", "Last 3 days", "Last 7 days", "All"])
     show_filter = colB.selectbox("Show", ["Everything", "Not applied yet", "Applied only"])
     auto = colC.checkbox("🔄 Auto-refresh (every 30s)", value=True)
     fhours = {"Last 24 hours": 24, "Last 3 days": 72, "Last 7 days": 168, "All": None}[feed_window]
+
+    # Ranking + de-junking. The feed used to come back in crawl order, which put
+    # score-0 noise above real matches; sorting by score and hiding the zeros is
+    # what makes this page scannable like "Posted Today".
+    colD, colE = st.columns([2, 4])
+    sort_mode = colD.selectbox("Sort by", ["Best match first", "Newest first"], index=0)
+    min_score = colE.slider(
+        "Hide jobs scoring below", 0, 80, 1,
+        help="Most of the feed scores 0 (off-target roles the filters didn't hard-reject). "
+             "Drag to 0 to see absolutely everything.")
+
+    # Experience sections, mirroring the buckets on "Today's Best Jobs". Years are
+    # parsed from the title/description; most entry-level posts state no number at
+    # all, so "not stated" is its own section rather than being silently dropped.
+    EXP_SECTIONS = [
+        ("🎓 No experience stated", lambda y: y is None),
+        ("① 0–2 years", lambda y: y is not None and y <= 2),
+        ("② 3–5 years", lambda y: y is not None and 3 <= y <= 5),
+        ("③ 5+ years", lambda y: y is not None and y > 5),
+    ]
 
     # Map each job's tracking status to a scannable badge so it's obvious at a
     # glance what you've already actioned vs. what's still untouched.
@@ -583,7 +605,11 @@ elif page == "🟢 Live Feed":
 
     @st.fragment(run_every=(30 if auto else None))
     def live_feed():
-        params = dict(order_by="discovered", exclude_rejected=True, limit=200)
+        # Fetch a wider slice than we show: the API orders by discovery, so with a
+        # small limit "Best match first" would only rank the newest handful and
+        # genuinely good older-in-the-window jobs would never surface. 400 matches
+        # what Posted Today already pulls comfortably (~0.25s warm).
+        params = dict(order_by="discovered", exclude_rejected=True, limit=400)
         if fhours:
             params["discovered_within_hours"] = fhours
         data = api_get("/jobs/", **params) or []
@@ -591,72 +617,101 @@ elif page == "🟢 Live Feed":
             data = [j for j in data if j.get("status") != "Applied"]
         elif show_filter == "Applied only":
             data = [j for j in data if j.get("status") == "Applied"]
+
+        n_fetched = len(data)
+        data = [j for j in data if (j.get("match_score") or 0) >= min_score]
+        if sort_mode == "Best match first":
+            # Sponsor-confirmed wins ties: same score, the H-1B employer is the
+            # better use of your time.
+            data.sort(key=lambda j: ((j.get("match_score") or 0),
+                                     bool(j.get("sponsor_confirmed"))), reverse=True)
+
         n_applied = sum(1 for j in data if j.get("status") == "Applied")
         n_today = sum(1 for j in data if posted_today(j))
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Jobs in window", len(data))
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Jobs shown", len(data))
         m2.metric("🔴 Posted today", n_today)
         m3.metric("✅ Applied", n_applied)
+        m4.metric("Hidden (low score)", n_fetched - len(data))
         if not data:
-            st.info("No jobs match this view. The live crawler adds new ones as it finds them.")
+            st.info(f"Nothing scores ≥ {min_score} in this window. Lower the score slider, "
+                    "or widen the time window — the crawler adds new jobs continuously.")
             return
-        rows = [{
-            "id": j.get("id"),
-            "applied": j.get("status") == "Applied",
-            "🔴": "🔴 TODAY" if posted_today(j) else "",
-            "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
-            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
-            "posted": (j.get("posted_at") or "")[:10] or "—",
-            "discovered": (j.get("discovered_at") or "")[:19],
-            "score": j.get("match_score"),
-            "title": j.get("title"),
-            "company": j.get("company_name"),
-            "location": j.get("location"),
-            "risk": j.get("sponsorship_risk"),
-            "open": apply_url(j),  # Himalayas rows → employer-careers search (Cloudflare-walled)
-        } for j in data]
-        n_sponsor = sum(1 for r in rows if r["sponsor"])
+        # Same tick-to-apply table as "Posted Today", minus the wide `discovered`
+        # timestamp that made this page sprawl sideways. Rendered once per
+        # experience section so each block stays short enough to actually scan.
+        def render_section(subset, key_prefix):
+            rows = [{
+                "id": j.get("id"),
+                "applied": j.get("status") == "Applied",
+                "🔴": "🔴 TODAY" if posted_today(j) else "",
+                "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
+                "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+                "posted": (j.get("posted_at") or "")[:10] or "—",
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "location": j.get("location"),
+                "risk": j.get("sponsorship_risk"),
+                "open": apply_url(j),  # Himalayas rows → employer-careers search
+            } for j in subset]
+
+            df = pd.DataFrame(rows).set_index("id")
+            # Re-key on the visible id-set: when the live crawler reshuffles rows
+            # the editor resets instead of applying a stale tick to a moved row.
+            editor_key = f"live_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
+            edited = st.data_editor(
+                df, key=editor_key, hide_index=True, use_container_width=True,
+                disabled=["🔴", "status", "sponsor", "posted", "score",
+                          "title", "company", "location", "risk", "open"],
+                column_order=["applied", "🔴", "status", "sponsor", "posted",
+                              "score", "title", "company", "location", "risk", "open"],
+                column_config={
+                    "applied": st.column_config.CheckboxColumn(
+                        "✅ Applied?", help="Tick when you've applied — it leaves the "
+                        "“Not applied yet” view and is kept (never pruned)."),
+                    "🔴": st.column_config.TextColumn(
+                        "🔴", help="🔴 TODAY = the job's ORIGINAL posting date is today "
+                        "(your local day), not when the crawler pulled it. Blank when the "
+                        "posting is older, or when the source doesn't expose a real post date."),
+                    "posted": st.column_config.TextColumn(
+                        "posted", help="Original posting date from the source (— if unknown)."),
+                    "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "score": st.column_config.NumberColumn("score", format="%d"),
+                },
+            )
+
+            # Reconcile the ticks with stored status. Idempotent — only a real
+            # change (newly ticked, or un-ticked an applied one) hits the API.
+            status_by_id = {j.get("id"): j.get("status") for j in subset}
+            for jid, r in edited.iterrows():
+                want = bool(r["applied"])
+                cur = status_by_id.get(jid)
+                if want and cur != "Applied":
+                    set_status(int(jid), "Applied"); return True
+                if not want and cur == "Applied":
+                    set_status(int(jid), "New"); return True
+            return False
+
+        n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
         st.caption(f"👉 Tick **✅ Applied?** on any row to mark it applied (it drops out of "
                    f"“Not applied yet”) · **🔴 TODAY** = original posting is dated today "
                    f"(not the crawler pull) · ✅ H-1B = confirmed sponsor · "
-                   f"{n_sponsor} of {len(rows)} sponsor-confirmed in view")
+                   f"{n_sponsor} of {len(data)} sponsor-confirmed in view")
 
-        df = pd.DataFrame(rows).set_index("id")
-        # Re-key on the visible id-set: when the live crawler reshuffles rows the
-        # editor resets instead of applying a stale tick to a row that moved.
-        editor_key = "live_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
-        edited = st.data_editor(
-            df, key=editor_key, hide_index=True, use_container_width=True,
-            disabled=["🔴", "status", "sponsor", "posted", "discovered", "score",
-                      "title", "company", "location", "risk", "open"],
-            column_order=["applied", "🔴", "status", "sponsor", "posted", "discovered",
-                          "score", "title", "company", "location", "risk", "open"],
-            column_config={
-                "applied": st.column_config.CheckboxColumn(
-                    "✅ Applied?", help="Tick when you've applied — it leaves the "
-                    "“Not applied yet” view and is kept (never pruned)."),
-                "🔴": st.column_config.TextColumn(
-                    "🔴", help="🔴 TODAY = the job's ORIGINAL posting date is today "
-                    "(your local day), not when the crawler pulled it. Blank when the "
-                    "posting is older, or when the source doesn't expose a real post date."),
-                "posted": st.column_config.TextColumn(
-                    "posted", help="Original posting date from the source (— if unknown)."),
-                "open": st.column_config.LinkColumn("open", display_text="open ↗"),
-                "score": st.column_config.NumberColumn("score", format="%d"),
-            },
-        )
-
-        # Reconcile the ticks with stored status. Idempotent — only a real change
-        # (newly ticked, or un-ticked an applied one) hits the API.
-        status_by_id = {j.get("id"): j.get("status") for j in data}
+        # Bucket by stated experience. years_required() reads the title+description,
+        # so this costs nothing extra — the API already returned both.
+        yrs_by_id = {j.get("id"): years_required(j) for j in data}
         changed = False
-        for jid, r in edited.iterrows():
-            want = bool(r["applied"])
-            cur = status_by_id.get(jid)
-            if want and cur != "Applied":
-                set_status(int(jid), "Applied"); changed = True
-            elif not want and cur == "Applied":
-                set_status(int(jid), "New"); changed = True
+        for idx, (label, belongs) in enumerate(EXP_SECTIONS):
+            subset = [j for j in data if belongs(yrs_by_id.get(j.get("id")))]
+            if not subset:
+                continue
+            n_sp = sum(1 for j in subset if j.get("sponsor_confirmed"))
+            st.subheader(f"{label}  ·  {len(subset)} jobs" + (f"  ·  {n_sp} ✅ H-1B" if n_sp else ""))
+            if render_section(subset, idx):
+                changed = True
+                break
         if changed:
             st.rerun()
 

@@ -39,6 +39,8 @@ from app.crawlers.themuse import TheMuseCrawler
 from app.crawlers.jobicy import JobicyCrawler
 from app.crawlers.remoteok import RemoteOKCrawler
 from app.crawlers.arbeitnow import ArbeitnowCrawler
+from app.crawlers.jobspresso import JobspressoCrawler
+from app.crawlers.weworkremotely import WeWorkRemotelyCrawler
 from app.crawlers.generic_placeholder import GenericCrawler
 from app.models.company import Company
 from app.utils.logging import get_logger
@@ -70,6 +72,8 @@ CRAWLERS: List[BaseCrawler] = [
     JobicyCrawler(),      # sentinel source: Jobicy remote
     RemoteOKCrawler(),    # sentinel source: RemoteOK
     ArbeitnowCrawler(),   # sentinel source: Arbeitnow (EU-heavy; ~0 US currently)
+    JobspressoCrawler(),      # sentinel source: Jobspresso RSS (WP Job Manager)
+    WeWorkRemotelyCrawler(),  # sentinel source: We Work Remotely RSS
     GenericCrawler(),  # keep LAST: matches anything as a fallback.
 ]
 

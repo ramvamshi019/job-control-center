@@ -46,6 +46,7 @@ HEAVILY_AGGREGATED = {"greenhouse", "lever", "ashby"}
 AGGREGATOR_BOARDS = {
     "himalayas", "themuse", "jobicy", "remoteok", "remotive",
     "arbeitnow", "new_grad", "yc_waas", "hn_hiring",
+    "jobspresso", "weworkremotely",
 }
 
 # A company with at least this many total postings is a large, well-known

@@ -279,6 +279,37 @@ def looks_us_strict(location: str) -> bool:
     return False
 
 
+# Location strings that carry NO geographic information: empty, or Workday's
+# collapsed multi-site placeholder ("2 Locations"). These are not evidence of a
+# foreign role — iCIMS almost never populates the field at all — but the strict
+# gate treated them as "not US" and rejected them outright.
+_EMPTY_LOC_RE = re.compile(r"^\s*(?:\d+\s+locations?)?\s*$", re.I)
+
+
+def location_is_unknown(location: str) -> bool:
+    """True when the location field tells us nothing (blank or 'N Locations')."""
+    return bool(_EMPTY_LOC_RE.match(location or ""))
+
+
+def looks_us_from_text(text: str) -> bool:
+    """Positive-US-evidence test against a job DESCRIPTION. Used only as a
+    fallback when the location field is unknown.
+
+    Deliberately strict — it demands a US signal AND no foreign marker, so
+    'no evidence either way' still fails. Measured on the live DB (2026-07-22):
+    of 71,191 blank-location jobs the strict gate was rejecting, 21,224 (30%)
+    state a US location in the body and are recovered by this; only 1,068 (2%)
+    are genuinely foreign and stay rejected; the 48,400 with no signal at all
+    remain rejected rather than being let in on a guess.
+    """
+    t = _strip_accents(normalize(text or ""))[:4000]
+    if not t:
+        return False
+    if _NON_US_RE.search(t) or _has_foreign_code(t):
+        return False
+    return bool(_has_us_signal(t) or _US_STATE_NAME_RE.search(t) or _US_CITY_RE.search(t))
+
+
 def _strip_accents(text: str) -> str:
     return "".join(
         ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch)
@@ -313,7 +344,10 @@ def evaluate(job: Job) -> FilterResult:
     # postings ("2 Locations") and foreign cities the name list misses (Bogota,
     # MEX-Corporativo, IND-Trivandrum) instead of giving them benefit of the doubt.
     if settings.us_only and not looks_us_strict(job.location):
-        return FilterResult(False, f"Location not clearly US: '{job.location}'")
+        # An unknown location is missing data, not a foreign address. Fall back to
+        # the description and keep the job only when the BODY names a US location.
+        if not (location_is_unknown(job.location) and looks_us_from_text(job.description)):
+            return FilterResult(False, f"Location not clearly US: '{job.location}'")
 
     # 1) Title-based seniority block.
     for kw in TITLE_BLOCK:

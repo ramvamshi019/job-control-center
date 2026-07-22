@@ -22,8 +22,15 @@ from app.models.job import Job
 from app.utils.text import normalize, term_in
 
 # ---- Title kill-words: senior / management roles we don't want ----
+# "senior"/"sr." are deliberately NOT here. They were rejecting ~19,100 jobs on
+# a word, while YEARS_BLOCK below already rejects anything demanding 5+ years --
+# the thing that actually makes a role out of reach. Blocking the title text too
+# threw away "Senior Data Engineer, 3+ years", which is applyable. Everything
+# still listed here (staff/principal/lead/manager/director/architect/head/VP)
+# implies far more experience than a 0-3yr candidate has, regardless of the
+# stated year count.
 TITLE_BLOCK = [
-    "senior", "sr.", "sr ", "staff", "principal", "lead ", "manager",
+    "staff", "principal", "lead ", "manager",
     "director", "architect", "head of", "head,", "vp ", "vice president",
 ]
 

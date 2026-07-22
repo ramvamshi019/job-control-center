@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # (same threshold the dashboard uses for its ✅ H-1B badge).
     sponsor_score_threshold: int = 50
 
+    # --- Alerts ---
+    # ntfy topic (or full URL) for new-job push notifications. Empty = no alerts.
+    # Pick something unguessable: anyone who knows the topic can read it.
+    ntfy_topic: str = ""
+
     # --- Candidate profile ---
     my_skills: str = "python,sql,aws,etl,spark,airflow,docker"
     my_target_roles: str = "data engineer,cloud engineer,software engineer"

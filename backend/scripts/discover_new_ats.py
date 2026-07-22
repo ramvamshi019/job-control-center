@@ -16,6 +16,7 @@ Run from backend/:
 from __future__ import annotations
 
 import csv
+import json
 import os
 import re
 import sqlite3
@@ -115,9 +116,90 @@ def _breezy(tok: str):
         return None
 
 
+def _paylocity(tok: str):
+    # Paylocity boards are keyed by a company GUID, not a name-derived slug, so
+    # this probe VALIDATES a candidate GUID/board URL harvested elsewhere rather
+    # than guessing one. Non-GUID tokens bail out before any network call, which
+    # is what keeps it free to leave in the cross-probe sweep below.
+    m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                  r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", tok or "")
+    if not m:
+        return None
+    url = f"https://recruiting.paylocity.com/recruiting/jobs/All/{m.group(0)}"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        if r.status_code != 200:
+            return None
+        # The board server-renders its whole posting list into window.pageData.
+        m2 = re.search(r"window\.pageData\s*=\s*", r.text)
+        if not m2:
+            return None
+        data, _ = json.JSONDecoder().raw_decode(r.text, m2.end())
+        return len(data.get("Jobs", []) or [])
+    except Exception:
+        return None
+
+
+def _ukg(tok: str):
+    # UKG Pro boards need host + client code + board GUID, so the candidate token
+    # must be a full board URL (or "host|code|guid"); bare slugs can't be probed.
+    m = re.search(r"(?:https?://)?([a-z0-9.-]*ultipro\.com)/([A-Za-z0-9]+)/JobBoard/"
+                  r"([0-9a-fA-F-]{36})", tok or "", re.I)
+    if m:
+        host, code, board = m.group(1).lower(), m.group(2), m.group(3)
+    elif (tok or "").count("|") == 2:
+        host, code, board = [p.strip() for p in tok.split("|")]
+    else:
+        return None
+    url = f"https://{host}/{code}/JobBoard/{board}/JobBoardView/LoadSearchResults"
+    # The PascalCase `opportunitySearch` wrapper is mandatory: a flat body still
+    # returns 200 but with totalCount 0.
+    body = {"opportunitySearch": {"Top": 1, "Skip": 0, "QueryString": "",
+                                  "OrderBy": [], "Filters": []}}
+    try:
+        r = requests.post(url, json=body, headers=HEADERS, timeout=TIMEOUT)
+        if r.status_code != 200:
+            return None
+        return r.json().get("totalCount", 0) or 0
+    except Exception:
+        return None
+
+
+def _oracle_hcm(tok: str):
+    # Oracle Cloud HCM ("ORC") boards live on a per-tenant Fusion pod hostname,
+    # so the candidate token must carry that host (career-site URL or
+    # "host|siteNumber"); the site number defaults to CX_1.
+    s = (tok or "").strip()
+    if "|" in s:
+        parts = [p.strip() for p in s.split("|")]
+        host, site = parts[0].lower(), (parts[1] if len(parts) > 1 else "") or "CX_1"
+        if not host.endswith("oraclecloud.com"):
+            return None
+    else:
+        m = re.search(r"(?:https?://)?([a-z0-9.-]+\.oraclecloud\.com)"
+                      r"(?:/hcmUI/CandidateExperience/[^/]+/sites/([^/?#]+))?", s, re.I)
+        if not m:
+            return None
+        host, site = m.group(1).lower(), (m.group(2) or "CX_1")
+    url = (f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+           f"?onlyData=true&finder=findReqs;siteNumber={site},limit=1")
+    try:
+        r = requests.get(url, headers={**HEADERS, "Accept": "application/json"},
+                         timeout=TIMEOUT)
+        if r.status_code != 200:
+            return None
+        items = r.json().get("items") or []
+        if not items:
+            return None
+        return items[0].get("TotalJobsCount", 0) or 0
+    except Exception:
+        return None
+
+
 PROBES = {"smartrecruiters": _sr, "workable": _workable,
           "recruitee": _recruitee, "rippling": _rippling, "gem": _gem,
-          "breezy": _breezy}
+          "breezy": _breezy, "paylocity": _paylocity, "ukg": _ukg,
+          "oracle_hcm": _oracle_hcm}
 
 lock = threading.Lock()
 winners: list = []

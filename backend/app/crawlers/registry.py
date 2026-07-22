@@ -35,6 +35,9 @@ from app.crawlers.yc_waas import YCWaaSCrawler
 from app.crawlers.remotive import RemotiveCrawler
 from app.crawlers.new_grad import NewGradCrawler
 from app.crawlers.breezy import BreezyCrawler
+from app.crawlers.paylocity import PaylocityCrawler
+from app.crawlers.ukg import UKGCrawler
+from app.crawlers.oracle_hcm import OracleHCMCrawler
 from app.crawlers.themuse import TheMuseCrawler
 from app.crawlers.jobicy import JobicyCrawler
 from app.crawlers.remoteok import RemoteOKCrawler
@@ -68,6 +71,9 @@ CRAWLERS: List[BaseCrawler] = [
     RemotiveCrawler(),    # sentinel source: Remotive remote board
     NewGradCrawler(),     # sentinel: GitHub new-grad/internship lists (entry-level)
     BreezyCrawler(),      # per-company Breezy HR boards
+    PaylocityCrawler(),   # per-company Paylocity Recruiting boards (US SMB/mid-market)
+    UKGCrawler(),         # UKG Pro / UltiPro boards (host|code|board-guid)
+    OracleHCMCrawler(),   # Oracle Cloud HCM "ORC" career sites (host|siteNumber)
     TheMuseCrawler(),     # sentinel source: The Muse
     JobicyCrawler(),      # sentinel source: Jobicy remote
     RemoteOKCrawler(),    # sentinel source: RemoteOK

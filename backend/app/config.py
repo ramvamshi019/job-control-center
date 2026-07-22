@@ -60,6 +60,18 @@ class Settings(BaseSettings):
     # time) to keep the database light. Jobs you've actioned are always kept.
     prune_days: int = 10
 
+    # Confirmed H-1B sponsors get a MUCH longer window. Real postings stay open
+    # for months, so a 10-day window was hiding entire good employers: Linear
+    # (24 open roles, median age 89d), Modal (32, 152d) and Watershed (39, 67d)
+    # all had ZERO postings inside 10 days, and 1,470 confirmed sponsors showed
+    # up as having no jobs at all. Keeping the wide window sponsor-only is what
+    # stops the database exploding — the bulk sources (Workday/iCIMS) still age
+    # out at prune_days.
+    sponsor_prune_days: int = 90
+    # h1b_history_score at or above this marks a company a confirmed sponsor
+    # (same threshold the dashboard uses for its ✅ H-1B badge).
+    sponsor_score_threshold: int = 50
+
     # --- Candidate profile ---
     my_skills: str = "python,sql,aws,etl,spark,airflow,docker"
     my_target_roles: str = "data engineer,cloud engineer,software engineer"

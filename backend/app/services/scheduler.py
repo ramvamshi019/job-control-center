@@ -95,7 +95,13 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
     single writer, so this must run on the main thread only."""
     summary = {"company": company.name, "found": len(jobs), "new": 0, "rejected": 0, "saved": 0}
     crawler = get_crawler_for(company)
-    stale_before = pruner.stale_cutoff()
+    # Confirmed sponsors keep a 90-day window, everyone else 10. Without this the
+    # crawl-time gate silently dropped every posting from good employers whose
+    # roles had simply been open a few weeks (Linear, Modal, Watershed, Kalshi
+    # all had zero postings inside 10 days despite 24-39 live openings each).
+    is_sponsor = (company.h1b_history_score or 0) >= settings.sponsor_score_threshold
+    stale_before = pruner.stale_cutoff(
+        settings.sponsor_prune_days if is_sponsor else None)
 
     # Dedupe FIRST (cheap, indexed) so expensive work only touches genuinely new
     # jobs. Then fill in REAL posted dates for those new jobs — some sources

@@ -18,6 +18,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -263,7 +264,7 @@ else:
 
 page = st.sidebar.radio(
     "Pages",
-    ["🔎 Find Jobs", "🔥 Fresh (apply now)",
+    ["⚡ Fast Apply", "🔎 Find Jobs", "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
      "Need Review", "Approved",
      "Applied", "Rejected", "Companies", "Stats"],
@@ -720,6 +721,120 @@ elif page == "🟢 Live Feed":
                        "(the Himalayas page is Cloudflare-walled and won't load in Chrome).")
 
     live_feed()
+
+elif page == "⚡ Fast Apply":
+    st.header("⚡ Fast Apply")
+    st.caption("The queue that actually matters: jobs that already passed every filter "
+               "and are still un-actioned, sponsor-confirmed first. Load the autofill "
+               "bookmarklet once, then it's ~45s per application instead of ~5min.")
+
+    # Workday and iCIMS make you create an ACCOUNT per employer, so they can't be
+    # autofilled and are slow by nature. Hidden by default so the queue stays
+    # made of applications you can finish in under a minute.
+    ACCOUNT_ATS = {"workday", "icims"}
+
+    c1, c2, c3 = st.columns([2, 2, 2])
+    sponsors_only = c1.checkbox("✅ H-1B sponsors only", value=True)
+    include_slow = c2.checkbox("Include Workday/iCIMS", value=False,
+                               help="These require creating an account per employer — "
+                                    "no autofill possible, several minutes each.")
+    min_sc = c3.slider("Min score", 0, 90, 40)
+
+    data = api_get("/jobs/", exclude_rejected=True, order_by="score", limit=1000) or []
+    queue = [j for j in data
+             if j.get("status") in ("New", "Need Review")
+             and (j.get("match_score") or 0) >= min_sc
+             and (include_slow or (j.get("source") or "") not in ACCOUNT_ATS)
+             and (not sponsors_only or j.get("sponsor_confirmed"))]
+    queue.sort(key=lambda j: (bool(j.get("sponsor_confirmed")), j.get("match_score") or 0),
+               reverse=True)
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("In your queue", len(queue))
+    m2.metric("✅ H-1B sponsors", sum(1 for j in queue if j.get("sponsor_confirmed")))
+    m3.metric("🔴 Posted today", sum(1 for j in queue if posted_today(j)))
+
+    # ---- the bookmarklet: profile is injected HERE, at render time, so no
+    # personal data ever lives in the repo. ----
+    with st.expander("① Set up the autofill bookmarklet (one time)", expanded=not queue):
+        prof = my_profile()
+        js_path = os.path.join(os.path.dirname(__file__), "autofill.js")
+        try:
+            with open(js_path) as fh:
+                js = fh.read().replace("__PROFILE_JSON__", json.dumps(prof))
+            bookmarklet = "javascript:" + quote(js, safe="")
+            st.markdown(
+                "**Drag this button to your bookmarks bar** (or right-click → copy link, "
+                "then make a new bookmark and paste it as the URL):")
+            components.html(
+                f'<a href="{bookmarklet}" '
+                'style="display:inline-block;padding:10px 18px;background:#16a34a;color:#fff;'
+                'border-radius:8px;font:600 15px system-ui;text-decoration:none">'
+                '⚡ Fill Application</a>'
+                '<p style="font:13px system-ui;color:#666;margin-top:10px">'
+                'On any Greenhouse / Lever / Ashby / SmartRecruiters application page, click it '
+                'once and your details drop in.</p>', height=110)
+            st.caption(
+                "It **fills and stops**: it never clicks Submit, never touches the résumé "
+                "upload (browsers forbid scripting file inputs), never answers "
+                "race/gender/veteran/disability questions, and never handles passwords. "
+                "You review and submit every application yourself.")
+        except FileNotFoundError:
+            st.error("autofill.js not found next to app.py — can't build the bookmarklet.")
+
+    with st.expander("② Your answers to the usual screening questions"):
+        prof = my_profile()
+        st.code(
+            f"Full name:            {prof.get('name','')}\n"
+            f"Email:                {prof.get('email','')}\n"
+            f"Phone:                {prof.get('phone','')}\n"
+            f"LinkedIn:             {prof.get('linkedin','')}\n"
+            f"Location:             {prof.get('location','')}\n"
+            f"Work authorization:   {prof.get('work_authorization','')}\n"
+            "Authorized to work in the US?          Yes (F-1 OPT, STEM extension eligible)\n"
+            "Will you require sponsorship?          Yes\n"
+            "Earliest start date:                   Immediately",
+            language="text")
+        st.caption("Salary expectations and all EEO/demographic questions are left blank on "
+                   "purpose — those are strategic or personal, not something to automate.")
+
+    st.subheader("③ Work the queue")
+    if not queue:
+        st.info("Nothing matches. Lower the min score, untick sponsors-only, or include "
+                "Workday/iCIMS.")
+    else:
+        st.caption(f"👉 Open ↗, click **⚡ Fill Application**, upload your résumé, submit, "
+                   f"then tick **Applied?** here. Résumé: `resumes/master/`")
+        rows = [{
+            "id": j.get("id"),
+            "applied": j.get("status") == "Applied",
+            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+            "score": j.get("match_score"),
+            "title": j.get("title"),
+            "company": j.get("company_name"),
+            "location": j.get("location"),
+            "ats": j.get("source"),
+            "open": apply_url(j),
+        } for j in queue[:150]]
+        df = pd.DataFrame(rows).set_index("id")
+        edited = st.data_editor(
+            df, key="fastapply_ed_" + str(abs(hash(tuple(r["id"] for r in rows)))),
+            hide_index=True, use_container_width=True,
+            disabled=["sponsor", "score", "title", "company", "location", "ats", "open"],
+            column_order=["applied", "sponsor", "score", "title", "company", "location",
+                          "ats", "open"],
+            column_config={
+                "applied": st.column_config.CheckboxColumn(
+                    "✅ Applied?", help="Tick once you've actually submitted."),
+                "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                "score": st.column_config.NumberColumn("score", format="%d"),
+            },
+        )
+        status_by_id = {j.get("id"): j.get("status") for j in queue}
+        for jid, r in edited.iterrows():
+            if bool(r["applied"]) and status_by_id.get(jid) != "Applied":
+                set_status(int(jid), "Applied")
+                st.rerun()
 
 elif page == "Today's Best Jobs":
     _thr = (api_get("/jobs/stats/summary") or {}).get("good_threshold")

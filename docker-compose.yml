@@ -39,6 +39,15 @@ services:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
     volumes:
       - jcc-data:/app/backend/data/db
+    # Hard fence so a heavy crawl wave can never starve the API. Symptom it
+    # fixes: during a `due=100 found=~9000` cycle the box (2 vCPU / 2 GB, with
+    # ~800 MB already in swap) starved uvicorn, and an 80ms GET /jobs/ blew past
+    # the dashboard's HTTP timeout -> "Read timed out" in the UI. Leaving ~0.8
+    # vCPU and the RAM for backend+dashboard keeps the API responsive; the
+    # crawler just takes a little longer per wave. Coverage is unchanged.
+    cpus: 1.2
+    mem_limit: 700m
+    memswap_limit: 1g   # cap swap too, else the limit just pushes it to disk
     restart: unless-stopped
     depends_on: [backend]
 

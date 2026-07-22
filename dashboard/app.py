@@ -34,14 +34,32 @@ st.set_page_config(page_title="Job Control Center", page_icon="🎯", layout="wi
 JOB_STATUSES = ["New", "Need Review", "Approved", "Applied", "Follow-up", "Rejected", "Archived"]
 
 # ---------- small API helpers ----------
+# The backend shares a 2-vCPU box with the crawler. During a heavy livewatch
+# wave the API can stall for tens of seconds even though the query itself is
+# ~80ms, so a short timeout turns a slow moment into a red error. Wait longer
+# and retry once instead.
+API_TIMEOUT = 90
+API_RETRIES = 2
+
+
 def api_get(path: str, **params):
-    try:
-        r = requests.get(f"{API}{path}", params=params, timeout=30)
-        r.raise_for_status()
-        return r.json()
-    except Exception as exc:  # noqa: BLE001
-        st.error(f"API GET {path} failed: {exc}")
-        return None
+    last_exc = None
+    for attempt in range(API_RETRIES):
+        try:
+            r = requests.get(f"{API}{path}", params=params, timeout=API_TIMEOUT)
+            r.raise_for_status()
+            return r.json()
+        except requests.exceptions.HTTPError as exc:
+            # A 4xx/5xx is a real answer from the API — retrying won't change it.
+            st.error(f"API GET {path} failed: {exc}")
+            return None
+        except Exception as exc:  # noqa: BLE001  (timeout / connection error)
+            last_exc = exc
+    st.error(
+        f"API GET {path} failed after {API_RETRIES} attempts: {last_exc}\n\n"
+        "The backend is likely busy behind a crawl wave — retry in a moment."
+    )
+    return None
 
 
 def api_patch(path: str, payload: dict):

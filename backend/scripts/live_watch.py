@@ -50,7 +50,11 @@ def fresh_alert_jobs(session, max_age_hours: int = 48):
 def one_cycle(batch: int, workers: int = 8) -> dict:
     with session_scope() as session:
         # Keep the DB light first: drop stale postings.
-        pruned = pruner.prune_old_jobs(session)
+        # Two retention passes, different questions. prune_old_jobs: "was this
+        # posted too long ago?" — blind to the 43% of jobs with no posted_at.
+        # prune_ghost_jobs: "is this still on the employer's board?" — the one
+        # that actually removes filled/closed reqs.
+        pruned = pruner.prune_old_jobs(session) + pruner.prune_ghost_jobs(session)
         due = scheduler.due_companies(session)
         total_due = len(due)
         if not due:

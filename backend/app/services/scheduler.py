@@ -107,7 +107,20 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
     # jobs. Then fill in REAL posted dates for those new jobs — some sources
     # (BambooHR) don't expose a date in their list API, so the crawler fetches it
     # from a per-job detail endpoint. Done concurrently, new-jobs-only, to stay fast.
-    new_jobs = [j for j in jobs if not dedupe.is_duplicate(session, j)]
+    # Split into genuinely-new vs already-stored. Re-seeing a stored job is the
+    # proof that the req is still open, so stamp last_seen_at on it — that, not
+    # age, is what later distinguishes a live posting from a ghost.
+    new_jobs, reseen = [], 0
+    now = datetime.utcnow()
+    for j in jobs:
+        existing = dedupe.find_duplicate(session, j)
+        if existing is None:
+            new_jobs.append(j)
+        else:
+            existing.last_seen_at = now
+            session.add(existing)
+            reseen += 1
+    summary["reseen"] = reseen
     enrich = getattr(crawler, "enrich_posted_date", None)
     if enrich and new_jobs:
         with ThreadPoolExecutor(max_workers=8) as ex:

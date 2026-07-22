@@ -38,6 +38,33 @@ def is_stale(job: Job, cutoff: Optional[datetime] = None) -> bool:
     return bool(job.posted_at and job.posted_at < cutoff)
 
 
+def prune_ghost_jobs(session: Session, days: Optional[int] = None) -> int:
+    """Delete postings we haven't SEEN on the employer's board in `days`.
+
+    This is the real ghost-job filter, and it does what age-based retention
+    can't. 43% of stored jobs (iCIMS, SmartRecruiters) have no posted_at at
+    all, so `prune_old_jobs` can never expire them no matter how dead they are.
+    A filled req simply stops appearing in the board feed, and last_seen_at
+    stops advancing — that's the signal.
+
+    Deliberately generous by default (settings.ghost_days): a job must be
+    missing across MANY crawl cycles before it's dropped, so one failed fetch,
+    a rate-limit, or a paginated crawler returning a partial page can never
+    delete live jobs. Actioned jobs are protected as always.
+    """
+    cutoff = stale_cutoff(days if days is not None else settings.ghost_days)
+    cond = and_(Job.last_seen_at.is_not(None), Job.last_seen_at < cutoff)
+    n = session.exec(
+        select(func.count()).select_from(Job).where(cond, Job.status.notin_(PROTECTED))
+    ).one()
+    if n:
+        session.exec(delete(Job).where(cond, Job.status.notin_(PROTECTED)))
+        session.commit()
+        log.info("Pruned %d ghost jobs (not seen on their board in %dd).",
+                 n, days if days is not None else settings.ghost_days)
+    return n
+
+
 def sponsor_ids_subquery():
     """SELECT of confirmed-H-1B-sponsor company ids, kept as a SUBQUERY rather
     than a materialised Python set: there are ~6.7k sponsors and binding that

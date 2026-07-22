@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     # (same threshold the dashboard uses for its ✅ H-1B badge).
     sponsor_score_threshold: int = 50
 
+    # A posting still present on the employer's board is live, however old it
+    # is; one that has vanished is dead, however recently it was posted. Jobs
+    # not re-seen in this many days are deleted. Generous on purpose: a job must
+    # go missing across many crawl cycles, so a single failed fetch or a
+    # paginated crawler returning a partial page can never delete live jobs.
+    ghost_days: int = 21
+
     # --- Alerts ---
     # ntfy topic (or full URL) for new-job push notifications. Empty = no alerts.
     # Pick something unguessable: anyone who knows the topic can read it.

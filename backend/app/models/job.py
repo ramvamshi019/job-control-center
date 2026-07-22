@@ -46,6 +46,14 @@ class Job(SQLModel, table=True):
     description: str = Field(default="")
     posted_at: Optional[datetime] = None
     discovered_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Last time this posting was still present on the employer's board. Stamped
+    # on EVERY crawl that re-sees it, unlike discovered_at which is write-once.
+    # This is what makes ghost jobs detectable: a filled/closed req simply stops
+    # appearing, and age alone can't tell you that — 43% of stored jobs have no
+    # posted_at at all (iCIMS, SmartRecruiters), so date-based retention can
+    # never expire them.
+    last_seen_at: Optional[datetime] = Field(default_factory=datetime.utcnow, index=True)
     raw_data_hash: str = Field(default="", index=True, description="dedupe key")
 
     # ---- Computed by the engines ----

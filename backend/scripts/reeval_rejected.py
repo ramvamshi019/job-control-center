@@ -44,10 +44,16 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--reason", default=None,
                     help="only re-check jobs whose rejection_reason contains this")
+    ap.add_argument("--include-visible", action="store_true",
+                    help="ALSO re-check New/Need Review jobs and demote any that now "
+                         "fail — needed after ADDING a rule (e.g. the company "
+                         "blocklist), since rejected-only scanning can't remove "
+                         "something already on screen")
     args = ap.parse_args()
 
     with session_scope() as s:
-        stmt = select(Job).where(Job.status == "Rejected")
+        statuses = ["Rejected"] + (["New", "Need Review"] if args.include_visible else [])
+        stmt = select(Job).where(Job.status.in_(statuses))
         if args.reason:
             stmt = stmt.where(Job.rejection_reason.contains(args.reason))
         jobs = s.exec(stmt).all()
@@ -56,10 +62,18 @@ def main() -> int:
         companies = {c.id: c for c in s.exec(select(Company)).all()}
         promoted, still, routes = 0, Counter(), Counter()
 
+        demoted = 0
         for i, job in enumerate(jobs, 1):
             result = filter_engine.evaluate(job)
             if not result.passed:
                 still[result.reason.split(":")[0]] += 1
+                # A visible job that now fails must come OFF the dashboard.
+                if job.status != "Rejected":
+                    job.status = "Rejected"
+                    job.rejection_reason = result.reason
+                    demoted += 1
+                    if not args.dry_run:
+                        s.add(job)
                 continue
 
             company = companies.get(job.company_id)
@@ -89,6 +103,7 @@ def main() -> int:
                 print(f"  ...{i}/{len(jobs)} scanned, {promoted} promoted", flush=True)
 
         print(f"\npromoted    : {promoted}")
+        print(f"demoted     : {demoted}  (were visible, now fail current rules)")
         for k, n in routes.most_common():
             print(f"   -> {k:<12} {n}")
         print(f"still rejected: {sum(still.values())}")

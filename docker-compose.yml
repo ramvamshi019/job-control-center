@@ -51,6 +51,25 @@ services:
     restart: unless-stopped
     depends_on: [backend]
 
+  # Grows the COMPANY list, which livewatch never does — it only pulls new jobs
+  # from companies already known. Without this the roster stayed frozen from the
+  # initial seed (2026-06-17) for over a month. Sleeps ~all week, so its cost is
+  # a few minutes of network per pass; capped anyway so it can't disturb the API.
+  discovery:
+    build: .
+    working_dir: /app/backend
+    command: python scripts/auto_discover.py --loop --every-hours 168 --workers 16
+    env_file: ./backend/.env
+    environment:
+      - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
+    volumes:
+      - jcc-data:/app/backend/data/db
+    cpus: 0.5
+    mem_limit: 350m
+    memswap_limit: 500m
+    restart: unless-stopped
+    depends_on: [backend]
+
   dashboard:
     build: .
     working_dir: /app

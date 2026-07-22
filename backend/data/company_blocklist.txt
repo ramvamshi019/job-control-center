@@ -1,0 +1,40 @@
+# Companies whose postings are hidden from the dashboard.
+#
+# One name per line. Blank lines and #-comments ignored. Matching is
+# case-insensitive and ignores spaces/punctuation, so "AG Technologies",
+# "agtechnologies" and "Agtechnologies1" all match the same entry.
+#
+# EDIT THIS FILE FREELY -- it is read at crawl time, no code change needed.
+# After editing, re-run:  python scripts/reeval_rejected.py
+# to apply it to jobs already stored (filters only run at crawl time).
+#
+# WHY A HAND-CURATED LIST: automated body-shop detection does not work here.
+# The obvious metric -- jobs per distinct title -- ranks Boeing (2.0) and
+# Snap-on (2.5) as WORSE offenders than Collabera (1.3) and KRG (1.3),
+# because large real employers legitimately repeat a title many times.
+# Every automated rule tried flagged Boeing, Booz Allen and Peraton. So the
+# list is explicit and reviewed rather than inferred.
+#
+# These are IT staffing / consulting firms rather than direct employers.
+# They post high volumes of generic reqs, often duplicated many times, and
+# for an F-1 candidate they are usually bench placements rather than a real
+# H-1B-sponsoring employer. Delete any line you disagree with -- some of
+# these (Collabera especially) are large legitimate staffing agencies that
+# do place people, so this is a judgement call, not a fact.
+
+Dellfortechnologies
+Krgtechnologyinc
+Agtechnologies1
+Tectammina
+Collabera2
+Consultadd4
+Careerguidant
+Hsssoft
+Eproinc
+Erostechnologiesin
+Comtechllc2
+Odysseyconsult
+Sesolutions
+Stemxpert1
+Usm2
+Atriagroupllc

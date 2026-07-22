@@ -13,7 +13,9 @@ why the system filtered it (Stats page + Rejected page).
 
 from __future__ import annotations
 
+import os
 import re
+from typing import Optional
 import unicodedata
 from dataclasses import dataclass
 
@@ -341,7 +343,53 @@ class FilterResult:
     reason: str = ""
 
 
+_BLOCKLIST_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data",
+                               "company_blocklist.txt")
+_blocklist_cache: Optional[set] = None
+
+
+def _squash(name: str) -> str:
+    """Company key for matching: lowercase, alphanumerics only, TRAILING digits
+    dropped.
+
+    The trailing-digit strip matters: seeding left artifacts like 'Collabera2',
+    'Usm2', 'Consultadd4' and 'Agtechnologies1' in the DB, so an exact match
+    would force you to write those suffixes in the blocklist. With it,
+    'AG Technologies', 'agtechnologies' and 'Agtechnologies1' are one entry.
+    """
+    key = re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+    return re.sub(r"\d+$", "", key) or key
+
+
+def blocked_companies() -> set:
+    """Hand-curated company blocklist, read once and cached.
+
+    Curated rather than inferred on purpose: every automated body-shop metric
+    tried (notably jobs-per-distinct-title) ranked Boeing and Snap-on as worse
+    offenders than the actual staffing firms, because big employers legitimately
+    repeat a title. Missing file = empty set, never an error.
+    """
+    global _blocklist_cache
+    if _blocklist_cache is None:
+        names = set()
+        try:
+            with open(os.path.abspath(_BLOCKLIST_PATH)) as fh:
+                for line in fh:
+                    line = line.split("#", 1)[0].strip()
+                    if line:
+                        names.add(_squash(line))
+        except FileNotFoundError:
+            pass
+        _blocklist_cache = names
+    return _blocklist_cache
+
+
 def evaluate(job: Job) -> FilterResult:
+    # Blocklisted employers first — cheapest check, and no amount of title or
+    # location quality makes a bench-shop posting worth your time.
+    if _squash(job.company_name) in blocked_companies():
+        return FilterResult(False, f"Blocklisted company: '{job.company_name}'")
+
     title = normalize(job.title)
     desc = normalize(job.description)
     etype = normalize(job.employment_type)

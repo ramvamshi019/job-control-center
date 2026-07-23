@@ -224,7 +224,12 @@ def posted_freshness(job: dict) -> str | None:
 def years_required(row: dict):
     """Smallest 'N years' figure mentioned in the title/description, or None if
     no experience requirement is stated. Mirrors the scoring engine so the
-    dashboard filter agrees with how jobs were scored."""
+    dashboard filter agrees with how jobs were scored.
+
+    Feed views fetch with `slim=true`, which drops the (huge) description and
+    ships this figure precomputed — so prefer it and only parse when absent."""
+    if "years_required" in row:
+        return row["years_required"]
     text = f"{row.get('title') or ''} {row.get('description') or ''}".lower()
     nums = [int(n) for n in re.findall(r"(\d{1,2})\+?\s*years?", text)]
     return min(nums) if nums else None
@@ -338,7 +343,8 @@ page = st.sidebar.radio(
 )
 
 # Quick live counter in the sidebar (jobs first seen in the last 24h).
-_recent = api_get("/jobs/", discovered_within_hours=24, exclude_rejected=True, limit=3000) or []
+_recent = api_get("/jobs/", discovered_within_hours=24, exclude_rejected=True,
+                  limit=3000, slim=True) or []
 st.sidebar.metric("🆕 New in last 24h", len(_recent))
 
 if st.sidebar.button("📤 Export Approved → CSV"):
@@ -584,7 +590,7 @@ elif page == "🔴 Posted Today":
         # 1000 truncated the oldest-in-window rows BEFORE the freshness filter ran
         # -- i.e. genuinely-today jobs were silently dropped off this page.
         raw = api_get("/jobs/", order_by="discovered", discovered_within_hours=30,
-                      exclude_rejected=True, limit=3000) or []
+                      exclude_rejected=True, limit=3000, slim=True) or []
         data = []
         for j in raw:
             fresh = posted_freshness(j)
@@ -743,7 +749,7 @@ elif page == "🟢 Live Feed":
         # small limit "Best match first" would only rank the newest handful and
         # genuinely good older-in-the-window jobs would never surface. 400 matches
         # what Posted Today already pulls comfortably (~0.25s warm).
-        params = dict(order_by="discovered", exclude_rejected=True, limit=400)
+        params = dict(order_by="discovered", exclude_rejected=True, limit=400, slim=True)
         if fhours:
             params["discovered_within_hours"] = fhours
         data = api_get("/jobs/", **params) or []

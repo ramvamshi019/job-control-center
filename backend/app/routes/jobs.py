@@ -7,6 +7,7 @@ The dashboard talks to these endpoints.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -25,6 +26,15 @@ from app.services import resume_builder as resume_builder_service
 from app.services import resume_tailor as resume_service
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+_YEARS_RE = re.compile(r"(\d{1,2})\+?\s*years?")
+
+
+def _years_required(title: str | None, description: str | None) -> Optional[int]:
+    """Smallest 'N years' figure in the title/description, or None. Mirrors the
+    dashboard's own parser so `slim` responses band identically to full ones."""
+    nums = [int(n) for n in _YEARS_RE.findall(f"{title or ''} {description or ''}".lower())]
+    return min(nums) if nums else None
 
 
 class JobStatusUpdate(BaseModel):
@@ -50,6 +60,11 @@ def list_jobs(
         None, description="Filter by JobRight-coverage tier: exclusive | likely | common"),
     order_by: str = Query("score", description="score | posted | discovered | exclusivity"),
     limit: int = Query(200, le=3000),
+    slim: bool = Query(
+        False,
+        description="Drop the heavy `description` field and return a precomputed "
+                    "`years_required` instead. For list/feed views, which never render "
+                    "the description and only parse years out of it."),
 ):
     stmt = select(Job).where(Job.match_score >= min_score)
     if status:
@@ -113,6 +128,12 @@ def list_jobs(
     out = []
     for j in jobs:
         d = j.model_dump()
+        if slim:
+            # `description` is ~62% of a feed payload (5.9 MB of 9.3 MB at
+            # limit=3000) and the list views only ever parse a years-of-experience
+            # figure out of it. Send that figure instead of the text.
+            d["years_required"] = _years_required(j.title, j.description)
+            d.pop("description", None)
         d["sponsor_score"] = scores.get(j.company_id, 0)
         d["sponsor_confirmed"] = d["sponsor_score"] >= 50
         # "board_known" = this company's board was already being crawled well

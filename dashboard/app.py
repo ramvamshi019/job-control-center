@@ -334,7 +334,7 @@ page = st.sidebar.radio(
     ["⚡ Fast Apply", "🔎 Find Jobs", "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
      "Need Review", "Approved",
-     "Applied", "Rejected", "Companies", "Stats"],
+     "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats"],
 )
 
 # Quick live counter in the sidebar (jobs first seen in the last 24h).
@@ -394,7 +394,8 @@ def render_job_card(job: dict, actions=("Approve", "Reject", "Review")):
         for i, action in enumerate(actions):
             if cols[i].button(action, key=f"{action}_{job['id']}"):
                 mapping = {"Approve": "Approved", "Reject": "Rejected", "Review": "Need Review",
-                           "Mark Applied": "Applied", "Follow-up": "Follow-up", "Archive": "Archived"}
+                           "Mark Applied": "Applied", "Follow-up": "Follow-up", "Archive": "Archived",
+                           "Restore": "New"}
                 set_status(job["id"], mapping.get(action, "New"))
                 st.rerun()
         # Dedicated "I applied" tracker on EVERY card — click after you apply.
@@ -594,6 +595,8 @@ elif page == "🔴 Posted Today":
             data = [j for j in data if j["_freshness"] == "confirmed"]
         if hide_applied:
             data = [j for j in data if j.get("status") != "Applied"]
+        # Jobs you dismissed (🗑️ -> Archived) never belong on Posted Today.
+        data = [j for j in data if j.get("status") != "Archived"]
         # Confirmed first, then strongest match; keeps the trustworthy rows on top.
         data.sort(key=lambda j: (j["_freshness"] != "confirmed",
                                  -(j.get("match_score") or 0)))
@@ -617,6 +620,9 @@ elif page == "🔴 Posted Today":
             rows = [{
                 "id": j.get("id"),
                 "applied": j.get("status") == "Applied",
+                # Always starts unticked: Archived jobs are filtered out above, so
+                # a row here is never already dismissed.
+                "dismiss": False,
                 "fresh": FRESH_BADGE.get(j["_freshness"], ""),
                 "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
                 "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
@@ -637,11 +643,14 @@ elif page == "🔴 Posted Today":
                 df, key=editor_key, hide_index=True, use_container_width=True,
                 disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
                           "location", "risk", "open"],
-                column_order=["applied", "fresh", "status", "sponsor", "posted", "score", "title",
-                              "company", "location", "risk", "open"],
+                column_order=["applied", "dismiss", "fresh", "status", "sponsor", "posted", "score",
+                              "title", "company", "location", "risk", "open"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
+                    "dismiss": st.column_config.CheckboxColumn(
+                        "🗑️", help="Tick to dismiss — removes it from Posted Today and files it "
+                                  "under 🗑️ Archived. Restore any time from the Archived page."),
                     "fresh": st.column_config.TextColumn(
                         "fresh", help="🔴 CONFIRMED = source stated today's date · "
                                       "🟡 LIKELY = source hides the date but it first appeared "
@@ -655,8 +664,11 @@ elif page == "🔴 Posted Today":
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
             for jid, r in edited.iterrows():
-                want = bool(r["applied"])
                 cur = status_by_id.get(jid)
+                # Dismiss wins: file it under Archived and drop it from the feed.
+                if bool(r["dismiss"]):
+                    set_status(int(jid), "Archived"); return True
+                want = bool(r["applied"])
                 if want and cur != "Applied":
                     set_status(int(jid), "Applied"); return True
                 if not want and cur == "Applied":
@@ -1040,6 +1052,37 @@ elif page == "Rejected":
     if not df.empty:
         show = ["title", "company_name", "rejection_reason", "match_score", "job_url"]
         st.dataframe(df[[c for c in show if c in df.columns]], use_container_width=True)
+
+elif page == "🗑️ Archived":
+    st.header("🗑️ Archived")
+    st.caption("Jobs you dismissed with the 🗑️ box (on Posted Today and other lists). They're "
+               "kept out of your feeds and protected from re-scoring, so they won't come back. "
+               "Tick **Restore** to send one back to New.")
+    df = jobs_df(status="Archived")
+    if df.empty:
+        st.info("Nothing archived. Dismiss a job with its 🗑️ box on Posted Today to file it here.")
+    else:
+        df = df.copy()
+        df["restore"] = False
+        df["apply"] = df.apply(lambda r: apply_url(r.to_dict()), axis=1)
+        show = ["restore", "title", "company_name", "location", "match_score",
+                "sponsorship_risk", "apply"]
+        view = df[[c for c in show if c in df.columns]]
+        view.index = df["id"]
+        edited = st.data_editor(
+            view, hide_index=True, use_container_width=True,
+            disabled=[c for c in view.columns if c != "restore"],
+            column_config={
+                "restore": st.column_config.CheckboxColumn(
+                    "Restore", help="Tick to send this job back to New (it'll reappear in your feeds)."),
+                "apply": st.column_config.LinkColumn("apply", display_text="open ↗"),
+                "match_score": st.column_config.NumberColumn("score", format="%d"),
+            },
+        )
+        for jid, r in edited.iterrows():
+            if bool(r["restore"]):
+                set_status(int(jid), "New")
+                st.rerun()
 
 elif page == "Companies":
     st.header("Companies")

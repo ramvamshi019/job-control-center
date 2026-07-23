@@ -61,7 +61,9 @@ def list_jobs(
         if _tier_sources:
             stmt = stmt.where(Job.source.in_(_tier_sources))
     if exclude_rejected:
-        stmt = stmt.where(Job.status != "Rejected")
+        # Also hides "Archived" — jobs the user manually dismissed — so a dismissed
+        # job disappears from every active feed, not just the one it was dismissed on.
+        stmt = stmt.where(Job.status.not_in(["Rejected", "Archived"]))
     if sponsorship_risk:
         stmt = stmt.where(Job.sponsorship_risk == sponsorship_risk)
     if q:

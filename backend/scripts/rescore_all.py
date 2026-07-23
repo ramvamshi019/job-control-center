@@ -40,8 +40,9 @@ from app.utils.logging import get_logger  # noqa: E402
 
 log = get_logger("rescore_all")
 
-# Statuses the user owns — never re-route these.
-PROTECTED = {"Approved", "Applied", "Follow-up"}
+# Statuses the user owns — never re-route these. "Archived" is included so a job
+# you manually dismissed stays dismissed instead of being re-scored back to New.
+PROTECTED = {"Approved", "Applied", "Follow-up", "Archived"}
 
 
 def main() -> None:

@@ -79,6 +79,9 @@ services:
       --server.enableCORS false --server.enableXsrfProtection false
     environment:
       - API_BASE_URL=http://backend:8000
+      # "Posted Today" / "fresh today" are computed in THIS zone, not the
+      # container's UTC. Change here if Ram relocates.
+      - JCC_LOCAL_TZ=America/Chicago
     ports:
       # localhost-only: no login on the dashboard. Access via SSH tunnel:
       #   ssh -L 8501:localhost:8501 root@<vps-ip>  → open http://localhost:8501

@@ -19,6 +19,7 @@ import os
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
 import requests
@@ -29,6 +30,27 @@ from dotenv import load_dotenv
 # Read API_BASE_URL from backend/.env if present, else default.
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "backend", ".env"))
 API = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+
+# "Today" means Ram's local calendar day, NOT the server's. The container runs
+# in UTC, so a bare datetime.now() would roll "today" over at UTC midnight (7pm
+# Central) -- postings from the evening would wrongly count as tomorrow's. Pin
+# to an explicit zone (override with JCC_LOCAL_TZ). If the zone can't be loaded
+# we fall back to None, i.e. the old system-local behaviour, so the page never
+# crashes over a timezone lookup.
+try:
+    LOCAL_TZ: ZoneInfo | None = ZoneInfo(os.getenv("JCC_LOCAL_TZ", "America/Chicago"))
+except (ZoneInfoNotFoundError, ValueError):
+    LOCAL_TZ = None
+
+
+def local_today():
+    """Today's date in Ram's zone (or system-local if the zone failed to load)."""
+    return datetime.now(LOCAL_TZ).date()
+
+
+def to_local_date(dt_utc: datetime):
+    """Date of a naive-UTC timestamp, seen from Ram's zone."""
+    return dt_utc.replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ).date()
 
 st.set_page_config(page_title="Job Control Center", page_icon="🎯", layout="wide")
 
@@ -160,9 +182,8 @@ def posted_today(job: dict) -> bool:
     disc = _parse_dt(job.get("discovered_at"))
     if disc is not None and abs((disc - posted).total_seconds()) < 5:
         return False  # crawl-time fallback stamp, not a real posted date
-    # posted_at is stored as naive UTC; convert to local before comparing dates.
-    posted_local = posted.replace(tzinfo=timezone.utc).astimezone()
-    return posted_local.date() == datetime.now().date()
+    # posted_at is stored as naive UTC; compare calendar dates in Ram's zone.
+    return to_local_date(posted) == local_today()
 
 
 def _discovered_today(job: dict) -> bool:
@@ -170,8 +191,7 @@ def _discovered_today(job: dict) -> bool:
     disc = _parse_dt(job.get("discovered_at"))
     if disc is None:
         return False
-    disc_local = disc.replace(tzinfo=timezone.utc).astimezone()
-    return disc_local.date() == datetime.now().date()
+    return to_local_date(disc) == local_today()
 
 
 def posted_freshness(job: dict) -> str | None:

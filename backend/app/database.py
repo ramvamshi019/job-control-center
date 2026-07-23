@@ -41,6 +41,11 @@ if _is_sqlite:
         cur.execute("PRAGMA journal_mode=WAL")
         cur.execute("PRAGMA busy_timeout=10000")  # 10s
         cur.execute("PRAGMA synchronous=NORMAL")
+        # Cap the -wal FILE. Checkpointing alone only marks WAL space reusable —
+        # without a size limit the file keeps its high-water mark forever, so one
+        # big write burst (a 550k-row rescore) left a 1.9 GB -wal next to a 1.5 GB
+        # db and it never shrank. This truncates it back after each checkpoint.
+        cur.execute("PRAGMA journal_size_limit=268435456")  # 256 MB
         cur.close()
 
 

@@ -25,6 +25,13 @@ services:
       # via SSH tunnel, never the public internet. (dashboard talks to it over
       # the internal docker network, so it needs no public port at all.)
       - "127.0.0.1:8000:8000"
+    # Fenced like the crawlers. Un-capped, one heavy /jobs/ query (the Posted
+    # Today net pulls ~2.6k rows WITH descriptions every 20s) could balloon
+    # uvicorn until the KERNEL OOM-killer fires and shoots an arbitrary victim —
+    # sshd or the crawler. With a cap, a runaway can only kill itself and
+    # `restart: unless-stopped` brings it straight back. Steady state is ~180 MB.
+    mem_limit: 700m
+    memswap_limit: 1g
     restart: unless-stopped
 
   livewatch:
@@ -86,6 +93,11 @@ services:
       # localhost-only: no login on the dashboard. Access via SSH tunnel:
       #   ssh -L 8501:localhost:8501 root@<vps-ip>  → open http://localhost:8501
       - "127.0.0.1:8501:8501"
+    # Streamlit keeps per-session state and this page auto-refreshes every 20s;
+    # a long-lived browser tab is the classic slow leak. Capped so it restarts
+    # itself instead of taking the box with it. Steady state is ~150 MB.
+    mem_limit: 500m
+    memswap_limit: 800m
     restart: unless-stopped
     depends_on: [backend]
 

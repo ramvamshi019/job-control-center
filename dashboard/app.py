@@ -165,6 +165,42 @@ def posted_today(job: dict) -> bool:
     return posted_local.date() == datetime.now().date()
 
 
+def _discovered_today(job: dict) -> bool:
+    """True if the crawler FIRST saw this posting during your local day."""
+    disc = _parse_dt(job.get("discovered_at"))
+    if disc is None:
+        return False
+    disc_local = disc.replace(tzinfo=timezone.utc).astimezone()
+    return disc_local.date() == datetime.now().date()
+
+
+def posted_freshness(job: dict) -> str | None:
+    """Classify how confident we are that a job is fresh TODAY:
+
+      "confirmed" - the source stated a real posting date and it's today.
+      "likely"    - the source hides the date (NULL or a crawl-time fallback
+                    stamp), but the posting FIRST appeared today on a board we
+                    were already crawling. A new posting on an established board
+                    is almost certainly newly-posted, so we surface it -- clearly
+                    marked as inferred, never conflated with a confirmed date.
+      None        - neither; don't show on Posted Today.
+
+    Half of all sources (iCIMS, SmartRecruiters, Workday, BambooHR) never expose
+    a usable posting date; without "likely" they'd be invisible here even when
+    genuinely brand-new."""
+    if posted_today(job):
+        return "confirmed"
+    if not job.get("board_known"):
+        return None  # can't trust "new = fresh" on a board we just started on
+    posted = _parse_dt(job.get("posted_at"))
+    disc = _parse_dt(job.get("discovered_at"))
+    date_is_usable = posted is not None and (
+        disc is None or abs((disc - posted).total_seconds()) >= 5)
+    if date_is_usable:
+        return None  # it HAS a real date and that date wasn't today -> genuinely old
+    return "likely" if _discovered_today(job) else None
+
+
 def years_required(row: dict):
     """Smallest 'N years' figure mentioned in the title/description, or None if
     no experience requirement is stated. Mirrors the scoring engine so the
@@ -481,45 +517,71 @@ elif page == "🕵️ JobRight Gap":
 
 elif page == "🔴 Posted Today":
     st.header("🔴 Posted Today")
-    st.caption("ONLY jobs whose original posting date is **today** (your local day) — not the "
-               "crawler's pull time. Citizenship-required and clearance-required roles are "
-               "excluded automatically. Auto-refreshes every 20s on its own, so new postings "
-               "appear live without touching anything.")
+    st.caption("Jobs that are fresh **today** (your local day). "
+               "🔴 **CONFIRMED** = the source stated a posting date of today. "
+               "🟡 **LIKELY** = the source hides the date, but this posting first appeared "
+               "today on a board we already crawl — almost always newly-posted. "
+               "Citizenship/clearance roles are excluded automatically. Auto-refreshes every 20s.")
 
     STATUS_BADGE = {
         "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
-    hide_applied = st.checkbox("Hide jobs I've already applied to", value=True)
+    c1, c2 = st.columns(2)
+    hide_applied = c1.checkbox("Hide jobs I've already applied to", value=True)
+    confirmed_only = c2.checkbox("Only date-confirmed (hide 🟡 LIKELY)", value=False,
+                                 help="Tick for the strict old behaviour: only jobs whose "
+                                      "source printed today's date.")
 
     @st.fragment(run_every=20)
     def posted_today_feed():
-        # Pull recent-by-posted-date, exclude_rejected drops citizenship/clearance
-        # (the sponsorship engine auto-rejects those). posted_within_hours is a wide
-        # net; posted_today() then keeps only real calendar-today postings and strips
-        # the workday/bamboohr crawl-time fallback stamps.
-        params = dict(order_by="posted", posted_within_hours=48,
-                      exclude_rejected=True, limit=400)
-        data = api_get("/jobs/", **params) or []
-        data = [j for j in data if posted_today(j)]
+        # ONE net, ordered by discovery. A job posted today is ALWAYS first seen
+        # <=30h ago (you can't discover a posting before it exists), so this net
+        # is a superset of both "confirmed" (real date today) and "likely" (date
+        # hidden, first seen today on a known board) -- no second query needed,
+        # which keeps this 20s-auto-refreshing page at one request per tick on
+        # the small VPS. exclude_rejected drops citizenship/clearance up front.
+        # NOTE: a plain `posted_within_hours` net would MISS the hidden-date rows
+        # entirely -- SQL `posted_at >= cutoff` skips NULLs -- so discovery-order
+        # is the only net that surfaces iCIMS/SmartRecruiters/Workday postings.
+        raw = api_get("/jobs/", order_by="discovered", discovered_within_hours=30,
+                      exclude_rejected=True, limit=1000) or []
+        data = []
+        for j in raw:
+            fresh = posted_freshness(j)
+            if fresh:
+                j["_freshness"] = fresh
+                data.append(j)
+        if confirmed_only:
+            data = [j for j in data if j["_freshness"] == "confirmed"]
         if hide_applied:
             data = [j for j in data if j.get("status") != "Applied"]
+        # Confirmed first, then strongest match; keeps the trustworthy rows on top.
+        data.sort(key=lambda j: (j["_freshness"] != "confirmed",
+                                 -(j.get("match_score") or 0)))
 
+        n_conf = sum(1 for j in data if j["_freshness"] == "confirmed")
+        n_likely = len(data) - n_conf
         m1, m2, m3 = st.columns(3)
-        m1.metric("🔴 Posted today", len(data))
+        m1.metric("🔴 Fresh today", len(data), help=f"{n_conf} confirmed · {n_likely} likely")
         m2.metric("✅ H-1B sponsors", sum(1 for j in data if j.get("sponsor_confirmed")))
         m3.metric("🆕 New (strong match)", sum(1 for j in data if j.get("status") == "New"))
         if not data:
-            st.info("Nothing posted today yet in the sponsor-safe set. This auto-updates — "
+            st.info("Nothing fresh today yet in the sponsor-safe set. This auto-updates — "
                     "new postings will pop in as the crawler finds them.")
             return
 
+        FRESH_BADGE = {"confirmed": "🔴 CONFIRMED", "likely": "🟡 LIKELY"}
         rows = [{
             "id": j.get("id"),
             "applied": j.get("status") == "Applied",
+            "fresh": FRESH_BADGE.get(j["_freshness"], ""),
             "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
             "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
-            "posted": (j.get("posted_at") or "")[:10] or "—",
+            # Confirmed rows show the real posting date; likely rows have no
+            # trustworthy date, so we show when we FIRST saw it, marked "~".
+            "posted": ((j.get("posted_at") or "")[:10] if j["_freshness"] == "confirmed"
+                       else "~" + (j.get("discovered_at") or "")[:10]) or "—",
             "score": j.get("match_score"),
             "title": j.get("title"),
             "company": j.get("company_name"),
@@ -528,22 +590,28 @@ elif page == "🔴 Posted Today":
             "open": apply_url(j),
         } for j in data]
         n_sponsor = sum(1 for r in rows if r["sponsor"])
-        st.caption(f"👉 Tick **✅ Applied?** to mark a job applied · ✅ H-1B = confirmed "
-                   f"sponsor · {n_sponsor} of {len(rows)} sponsor-confirmed in view")
+        st.caption(f"👉 Tick **✅ Applied?** to mark a job applied · 🔴 CONFIRMED date vs "
+                   f"🟡 LIKELY (first seen today) · {n_conf} confirmed / {n_likely} likely · "
+                   f"{n_sponsor} sponsor-confirmed in view")
 
         df = pd.DataFrame(rows).set_index("id")
         editor_key = "today_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
         edited = st.data_editor(
             df, key=editor_key, hide_index=True, use_container_width=True,
-            disabled=["status", "sponsor", "posted", "score", "title", "company",
+            disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
                       "location", "risk", "open"],
-            column_order=["applied", "status", "sponsor", "posted", "score", "title",
+            column_order=["applied", "fresh", "status", "sponsor", "posted", "score", "title",
                           "company", "location", "risk", "open"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
+                "fresh": st.column_config.TextColumn(
+                    "fresh", help="🔴 CONFIRMED = source stated today's date · "
+                                  "🟡 LIKELY = source hides the date but it first appeared "
+                                  "today on a board we already crawl."),
                 "posted": st.column_config.TextColumn(
-                    "posted", help="Original posting date from the source."),
+                    "posted", help="Real posting date (confirmed rows) or ~first-seen date "
+                                   "(likely rows)."),
                 "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                 "score": st.column_config.NumberColumn("score", format="%d"),
             },
@@ -565,8 +633,9 @@ elif page == "🔴 Posted Today":
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")
     st.caption("Newest jobs the crawler has detected, **ranked best-match first** and grouped "
-               "into experience sections. This is the only page that shows Workday/iCIMS roles "
-               "— they never expose a real posting date, so they can't appear in Posted Today.")
+               "into experience sections. Shows the full firehose, including Workday/iCIMS roles "
+               "that hide their posting date (those now also surface on Posted Today as 🟡 LIKELY "
+               "when freshly seen).")
 
     colA, colB, colC = st.columns([2, 2, 2])
     feed_window = colA.selectbox("Show jobs discovered within", ["Last 24 hours", "Last 3 days", "Last 7 days", "All"])

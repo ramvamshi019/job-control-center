@@ -90,11 +90,15 @@ def list_jobs(
     cids = {j.company_id for j in jobs if j.company_id}
     scores: dict[int, int] = {}
     counts: dict[int, int] = {}
+    created: dict[int, datetime] = {}
     if cids:
-        for cid, sc in session.exec(
-            select(Company.id, Company.h1b_history_score).where(Company.id.in_(cids))
+        for cid, sc, cr in session.exec(
+            select(Company.id, Company.h1b_history_score, Company.created_at)
+            .where(Company.id.in_(cids))
         ).all():
             scores[cid] = sc or 0
+            if cr is not None:
+                created[cid] = cr
         # Total postings per company = "footprint" for the JobRight estimate.
         from sqlalchemy import func
         for cid, n in session.exec(
@@ -109,6 +113,16 @@ def list_jobs(
         d = j.model_dump()
         d["sponsor_score"] = scores.get(j.company_id, 0)
         d["sponsor_confirmed"] = d["sponsor_score"] >= 50
+        # "board_known" = this company's board was already being crawled well
+        # before this job appeared (>2 days). It lets the dashboard treat a
+        # freshly-seen posting on an established board as "likely posted today"
+        # even when the source hides the real date -- WITHOUT mislabelling the
+        # backfill dump from a board we only just started crawling.
+        _cr = created.get(j.company_id)
+        d["board_known"] = bool(
+            _cr is not None and j.discovered_at is not None
+            and _cr < j.discovered_at - timedelta(days=2)
+        )
         d.update(jobright_radar.classify(
             source=j.source,
             company_name=j.company_name,

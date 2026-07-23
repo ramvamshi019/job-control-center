@@ -53,9 +53,9 @@ OFF_DOMAIN_SIGNALS = [
 # match outranks a role that merely name-drops "git"/"docker".
 CORE_SKILLS = [
     "python", "sql", "pl/sql", "spark", "pyspark", "spark sql", "spark streaming",
-    "hadoop", "hive", "hdfs", "scala", "etl", "elt", "airflow", "kafka",
-    "snowflake", "databricks", "redshift", "bigquery", "dbt", "pandas",
-    "postgresql", "data warehouse", "data pipeline",
+    "etl", "elt", "airflow", "kafka", "dbt",
+    "snowflake", "databricks", "redshift", "bigquery", "pandas",
+    "postgresql", "pgvector", "fastapi", "data warehouse", "data pipeline",
 ]
 
 JUNIOR_SIGNALS = [

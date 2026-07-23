@@ -2,50 +2,43 @@
 
 **Title:** Data Engineer | Analytics Engineer | ETL Developer
 **Location:** MO, United States
-**Phone:** 417-419-8066 · **Email:** rrudraram4@gmail.com · **LinkedIn:** linkedin.com/in/ramvamshikrishna
+**Phone:** 417-419-8066 · **Email:** rrudraram4@gmail.com · **LinkedIn:** linkedin.com/in/ramvamshikrishna · **GitHub:** github.com/ramvamshi019
 
 ## Professional Summary
-Data Engineer with nearly 2 years of professional experience designing scalable data pipelines and analytics solutions in the healthcare and life sciences domain. Skilled in Python, SQL, PySpark, and Apache Spark for batch and real-time data processing, with strong hands-on experience building ETL/ELT pipelines on AWS (EMR, Glue, S3, Redshift). Proven ability to design dimensional data models, build automated data quality frameworks, and deliver curated, analytics-ready datasets that power BI dashboards, regulatory reporting, and machine learning workflows. Experienced in workflow orchestration with Apache Airflow, query and warehouse performance tuning, and translating business requirements into clean, well-modeled datasets and actionable insights.
+Data Engineer with 2 years building production ETL/ELT pipelines on AWS across 5+ TB of regulated healthcare data, plus an MS in Computer Science. Currently builds and operates a job-market data platform tracking 444,000+ postings ingested from roughly 22,900 sources. Depth in Python, PySpark, SQL, Airflow, and Redshift, with hands-on distributed processing, data quality, and pipeline orchestration.
 
 ## Technical Skills
-- **Programming & Scripting:** Python, SQL, PL/SQL, Shell Scripting, Scala (basic), Java (basic)
-- **Big Data & Distributed Processing:** Apache Spark, PySpark, Spark SQL, Spark Streaming, Hadoop, Hive, HDFS
-- **AWS Cloud:** S3, EMR, Glue, Lambda, Redshift, Athena, Kinesis, Step Functions, CloudWatch, IAM
-- **Azure Cloud:** Azure Data Factory (ADF), Azure Databricks, Synapse Analytics, ADLS Gen2, Blob Storage, Azure Functions, Azure Monitor
-- **Data Warehousing:** Snowflake, Amazon Redshift, Azure Synapse, BigQuery (familiar), Star & Snowflake Schemas, Dimensional Modeling, SCD Type 1/2
-- **Workflow Orchestration:** Apache Airflow, AWS Step Functions, Azure Data Factory, Control-M (basic)
-- **Streaming & Messaging:** Apache Kafka, AWS Kinesis, Spark Structured Streaming, Event Hubs
-- **Databases:** PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, DynamoDB
-- **BI & Analytics:** Power BI, Tableau, Looker (familiar), Excel (advanced), Data Visualization, Reporting
-- **Data Formats:** JSON, XML, Parquet, Avro, ORC, CSV, Delta Lake
-- **DevOps & CI/CD:** Git, GitHub, Bitbucket, Jenkins, Azure DevOps, Docker, Terraform (basic), Linux/Unix
-- **Data Engineering Concepts:** ETL/ELT, Data Modeling, Data Quality, Data Governance, Source-to-Target Mapping, Data Lineage, Metadata Management, Master Data Management
-- **Analytics & ML Support:** Feature Engineering, Data Preparation for ML, Pandas, NumPy, Jupyter, Statistical Analysis
-- **Methodologies:** Agile/Scrum, Kanban, TDD, Code Reviews, Sprint Planning
+- **Languages:** Python, SQL, PL/SQL, TypeScript, JavaScript, Bash
+- **Data Engineering:** Apache Spark, PySpark, Spark SQL & Streaming, Apache Airflow, dbt, Kafka, ETL/ELT, Dimensional Modeling, Star Schema, SCD Type 1/2, Data Quality, Data Governance, Schema Normalization
+- **Cloud:** AWS (S3, EMR, Glue, Redshift, Lambda, Athena, Kinesis, Step Functions); Azure (Data Factory, Databricks, Synapse, ADLS Gen2); DigitalOcean
+- **Data Stores:** Amazon Redshift, PostgreSQL (pgvector), MySQL, SQL Server, SQLite, Delta Lake, Parquet, Avro
+- **Engineering & AI:** Docker, Docker Compose, CI/CD, Git, Linux, Caddy, REST APIs, FastAPI, SQLModel, Celery, Redis, Streamlit, pytest, TDD, Agile/Scrum; LLM Integration (OpenAI, Anthropic), RAG, Vector Embeddings, Pandas, NumPy, Power BI, Tableau
 
 ## Professional Experience
 ### Data Engineer — Johnson & Johnson · Feb 2022 – Dec 2023
 *Hyderabad, India · Healthcare / Life Sciences*
-- Developed scalable ETL pipelines using Python, PySpark, and SQL on AWS (EMR, Glue, S3, Redshift) to process clinical trial and patient healthcare datasets exceeding 5TB, enabling timely insights for research teams.
-- Built batch and streaming pipelines with Apache Spark, Kafka, and AWS Kinesis for ingestion and transformation of high-volume HL7 and FHIR healthcare data, supporting near real-time analytics.
-- Designed and maintained 25+ Apache Airflow DAGs for workflow orchestration, improving pipeline reliability and observability while reducing job failures by 35%.
-- Modeled and built star-schema data marts in Amazon Redshift supporting clinical reporting, regulatory compliance, and operational dashboards consumed by 100+ analysts.
-- Tuned complex SQL queries and optimized Redshift table design (distribution keys, sort keys, compression), reducing query execution time on multi-billion-row tables by 50%.
-- Engineered data validation frameworks in Python to verify source-to-target mappings and transformations, catching data quality issues early and improving downstream data trust.
-- Built reusable Python utilities and libraries for ingestion, transformation, logging, and validation, accelerating new pipeline development by 30% across the team.
-- Migrated legacy on-premise ETL workloads to AWS, leveraging S3 for storage, Glue Catalog for metadata, and EMR/Spark for distributed processing, reducing infrastructure costs by approximately 30%.
-- Prepared analytics-ready datasets for data scientists and biostatisticians, performing feature engineering, aggregation, and pivoting using Python (Pandas, NumPy) and Spark.
-- Collaborated with BI teams to deliver curated datasets feeding Tableau and Power BI dashboards used by clinical operations and executive leadership.
-- Worked in Agile/Scrum sprints, participating in sprint planning, code reviews, retrospectives, and stakeholder demos to deliver features iteratively.
+- Processed 5+ TB of clinical-trial and patient healthcare data by building batch and streaming ETL/ELT pipelines in Python, PySpark, and SQL on AWS (EMR, Glue, S3, Redshift) with Kafka and Kinesis ingestion of HL7 and FHIR records, delivering analytics-ready datasets to research teams.
+- Cut query execution time on multi-billion-row tables by 50% by redesigning Redshift physical layout (distribution keys, sort keys, column compression) across star-schema data marts serving clinical reporting, regulatory compliance, and 100+ analysts.
+- Reduced pipeline job failures by 35% by developing and maintaining 25+ Apache Airflow DAGs with retry, alerting, and SLA monitoring, improving orchestration reliability and observability.
+- Accelerated new pipeline development by 30% team-wide by designing reusable, modular Python libraries for ingestion, transformation, logging, and validation, enforced through TDD and peer code review.
 
 ## Projects
-### JobJarvis — Automated US Job-Search Data Platform · Mar 2025 – Present
-*Python, FastAPI, SQLModel/SQLite, Streamlit, REST APIs, Anthropic Claude API, Docker*
-- Built a full-stack, 24/7 automated data platform that crawls 20+ applicant tracking systems (Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, BambooHR, and more), ingesting and normalizing ~280,000 US job postings across ~22,000 companies into a FastAPI + SQLite (WAL) backend with a Streamlit analytics dashboard.
-- Engineered concurrent ingestion crawlers (24 worker threads, thread-local HTTP sessions, retry/backoff); diagnosed and fixed ORM session-concurrency bugs that lifted throughput from a few hundred to 17,000+ postings per crawl cycle.
-- Designed a rule-based scoring and filtering engine using Python word-boundary keyword matching to rank roles by skills fit and automatically screen out non-relevant postings.
-- Implemented a posted-date retention/prune policy, a scheduled digest with desktop notifications, and CSV data exports; containerized the services with Docker for cloud deployment.
+### Job Control Center — Job-market data platform, deployed and running 24/7 · 2026
+*Python, FastAPI, SQLModel, SQLite (WAL), Streamlit, Docker Compose, Caddy, DigitalOcean*
+- Built a continuously running ingestion platform that crawls roughly 22,900 company career pages through 29 source-specific modules (Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, BambooHR, Paylocity, UKG, Oracle HCM, and job boards), normalizing heterogeneous payloads into a single schema across 444,000+ tracked postings.
+- Diagnosed and fixed a source-fidelity defect in which a vendor's last-modified timestamp was ingested as the publish date, causing a 778-day-old posting to surface as new; enforced true publish-date semantics at the source layer and added explicit handling for the 43% of records whose providers emit no publish date.
+- Designed a tiered retention and staleness model (90-day retention for high-value employers versus 10-day for others, with expiry detected from last-seen crawl timestamps rather than posting age) after short uniform windows were found to be dropping entire viable employers.
+- Implemented a profile-matching scorer ranking every posting on role fit and employer signals, with a calibrated score threshold that suppresses high-volume duplicate-listing spam, plus a re-evaluation job to rescore stored rows when filter logic changes.
+- Deployed a three-service stack (API, crawler, dashboard) via Docker Compose on a 2 vCPU / 2 GB droplet behind Caddy with HTTPS, applying CPU and memory limits to isolate the crawler from the API and tuning SQLite WAL access patterns around its single-writer constraint.
+
+### JobJarvis — Full-stack LLM job-search platform · github.com/ramvamshi019/jobjarvis · 2026
+*FastAPI, Next.js, TypeScript, PostgreSQL/pgvector, Celery, Redis, dbt, Airflow, Docker*
+- Built a full-stack LLM job-search platform: async FastAPI backend (SQLAlchemy 2.0, Alembic) with Celery workers over Postgres and Redis, pgvector semantic matching against candidate profiles, dbt models, Airflow DAGs, and a Chrome extension, deployed via Docker Compose behind Caddy.
+
+### E-Commerce Support Classification · github.com/ramvamshi019/Ecommerce-ml-project · 2025
+*PySpark, Python, Machine Learning, Distributed Computing (graduate coursework)*
+- Built an ML pipeline classifying e-commerce support cases and benchmarked distributed PySpark against single-node execution, quantifying runtime and scaling behavior across data volumes.
 
 ## Education
-- **Master of Science in Computer Science** — Missouri State University, Springfield, MO · Dec 2025
+- **Master of Science in Computer Science** — Missouri State University, Springfield, MO · Jan 2024 – Dec 2025
 - **Bachelor of Technology in Computer Science** — Koneru Lakshmaiah Education Foundation, India · May 2023

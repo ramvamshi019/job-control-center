@@ -165,6 +165,35 @@ def list_jobs(
     return out
 
 
+@router.get("/count")
+def count_jobs(
+    session: Session = Depends(get_session),
+    status: Optional[str] = Query(None),
+    min_score: int = Query(0),
+    exclude_rejected: bool = Query(False),
+    discovered_within_hours: Optional[int] = Query(None),
+    posted_within_hours: Optional[int] = Query(None),
+):
+    """Just the number, via SQL COUNT — no rows materialized.
+
+    Streamlit re-runs the whole script on EVERY interaction, and the sidebar's
+    "New in last 24h" badge was doing that by fetching up to 3000 full job rows
+    (~3.4 MB, ~1.4 s) and calling len() on them. That cost was paid on every
+    click, on every page. This turns it into a millisecond COUNT.
+    Declared before /{job_id} so the literal path wins the match.
+    """
+    stmt = select(func.count()).select_from(Job).where(Job.match_score >= min_score)
+    if status:
+        stmt = stmt.where(Job.status == status)
+    if exclude_rejected:
+        stmt = stmt.where(Job.status.not_in(["Rejected", "Archived"]))
+    if discovered_within_hours:
+        stmt = stmt.where(Job.discovered_at >= datetime.utcnow() - timedelta(hours=discovered_within_hours))
+    if posted_within_hours:
+        stmt = stmt.where(Job.posted_at >= datetime.utcnow() - timedelta(hours=posted_within_hours))
+    return {"count": session.exec(stmt).one()}
+
+
 @router.get("/{job_id}", response_model=Job)
 def get_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(Job, job_id)

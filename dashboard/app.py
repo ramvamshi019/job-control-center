@@ -343,9 +343,11 @@ page = st.sidebar.radio(
 )
 
 # Quick live counter in the sidebar (jobs first seen in the last 24h).
-_recent = api_get("/jobs/", discovered_within_hours=24, exclude_rejected=True,
-                  limit=3000, slim=True) or []
-st.sidebar.metric("🆕 New in last 24h", len(_recent))
+# SQL COUNT, not a 3000-row fetch: Streamlit re-runs this whole script on every
+# interaction, so anything here is paid on every click of every page.
+_recent_count = (api_get("/jobs/count", discovered_within_hours=24,
+                         exclude_rejected=True) or {}).get("count", 0)
+st.sidebar.metric("🆕 New in last 24h", _recent_count)
 
 if st.sidebar.button("📤 Export Approved → CSV"):
     res = api_post("/export/")

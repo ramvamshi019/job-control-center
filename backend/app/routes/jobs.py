@@ -66,7 +66,13 @@ def list_jobs(
                     "`years_required` instead. For list/feed views, which never render "
                     "the description and only parse years out of it."),
 ):
-    stmt = select(Job).where(Job.match_score >= min_score)
+    stmt = select(Job)
+    # Only filter on score when it actually excludes something. `match_score >= 0`
+    # matches every row, but it makes SQLite pick idx_jobs_match_score and walk
+    # all 550k+ of them instead of seeking idx_jobs_discovered_at — measured 26.6s
+    # vs 1.0s for the identical result. A no-op predicate is not free.
+    if min_score > 0:
+        stmt = stmt.where(Job.match_score >= min_score)
     if status:
         stmt = stmt.where(Job.status == status)
     # Pre-narrow by source when a JobRight tier is requested (the dominant
@@ -182,7 +188,9 @@ def count_jobs(
     click, on every page. This turns it into a millisecond COUNT.
     Declared before /{job_id} so the literal path wins the match.
     """
-    stmt = select(func.count()).select_from(Job).where(Job.match_score >= min_score)
+    stmt = select(func.count()).select_from(Job)
+    if min_score > 0:  # see list_jobs: a no-op score filter costs a full index walk
+        stmt = stmt.where(Job.match_score >= min_score)
     if status:
         stmt = stmt.where(Job.status == status)
     if exclude_rejected:

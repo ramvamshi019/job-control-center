@@ -49,7 +49,7 @@ def list_jobs(
     jobright_tier: Optional[str] = Query(
         None, description="Filter by JobRight-coverage tier: exclusive | likely | common"),
     order_by: str = Query("score", description="score | posted | discovered | exclusivity"),
-    limit: int = Query(200, le=1000),
+    limit: int = Query(200, le=3000),
 ):
     stmt = select(Job).where(Job.match_score >= min_score)
     if status:

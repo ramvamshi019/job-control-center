@@ -230,6 +230,17 @@ def years_required(row: dict):
     return min(nums) if nums else None
 
 
+# Experience bands shared by "Posted Today" and "Live Feed". Years are parsed
+# from the title/description; most entry-level posts state no number at all, so
+# "not stated" is its own band rather than being silently dropped.
+EXP_SECTIONS = [
+    ("🎓 No experience stated", lambda y: y is None),
+    ("① 0–2 years", lambda y: y is not None and y <= 2),
+    ("② 3–5 years", lambda y: y is not None and 3 <= y <= 5),
+    ("③ 5+ years", lambda y: y is not None and y > 5),
+]
+
+
 def set_status(job_id: int, status: str, reason: str = ""):
     payload = {"status": status}
     if reason:
@@ -327,7 +338,7 @@ page = st.sidebar.radio(
 )
 
 # Quick live counter in the sidebar (jobs first seen in the last 24h).
-_recent = api_get("/jobs/", discovered_within_hours=24, exclude_rejected=True, limit=1000) or []
+_recent = api_get("/jobs/", discovered_within_hours=24, exclude_rejected=True, limit=3000) or []
 st.sidebar.metric("🆕 New in last 24h", len(_recent))
 
 if st.sidebar.button("📤 Export Approved → CSV"):
@@ -547,11 +558,15 @@ elif page == "🔴 Posted Today":
         "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     hide_applied = c1.checkbox("Hide jobs I've already applied to", value=True)
     confirmed_only = c2.checkbox("Only date-confirmed (hide 🟡 LIKELY)", value=False,
                                  help="Tick for the strict old behaviour: only jobs whose "
                                       "source printed today's date.")
+    group_by_exp = c3.checkbox("Group by experience", value=True,
+                               help="Split today's jobs into experience bands "
+                                    "(no-experience-stated · 0–2 · 3–5 · 5+ years), parsed "
+                                    "from each posting. Untick for one flat ranked list.")
 
     @st.fragment(run_every=20)
     def posted_today_feed():
@@ -564,8 +579,11 @@ elif page == "🔴 Posted Today":
         # NOTE: a plain `posted_within_hours` net would MISS the hidden-date rows
         # entirely -- SQL `posted_at >= cutoff` skips NULLs -- so discovery-order
         # is the only net that surfaces iCIMS/SmartRecruiters/Workday postings.
+        # limit=3000 (API cap): on a busy day >1000 jobs land in 30h, so the old
+        # 1000 truncated the oldest-in-window rows BEFORE the freshness filter ran
+        # -- i.e. genuinely-today jobs were silently dropped off this page.
         raw = api_get("/jobs/", order_by="discovered", discovered_within_hours=30,
-                      exclude_rejected=True, limit=1000) or []
+                      exclude_rejected=True, limit=3000) or []
         data = []
         for j in raw:
             fresh = posted_freshness(j)
@@ -592,60 +610,82 @@ elif page == "🔴 Posted Today":
             return
 
         FRESH_BADGE = {"confirmed": "🔴 CONFIRMED", "likely": "🟡 LIKELY"}
-        rows = [{
-            "id": j.get("id"),
-            "applied": j.get("status") == "Applied",
-            "fresh": FRESH_BADGE.get(j["_freshness"], ""),
-            "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
-            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
-            # Confirmed rows show the real posting date; likely rows have no
-            # trustworthy date, so we show when we FIRST saw it, marked "~".
-            "posted": ((j.get("posted_at") or "")[:10] if j["_freshness"] == "confirmed"
-                       else "~" + (j.get("discovered_at") or "")[:10]) or "—",
-            "score": j.get("match_score"),
-            "title": j.get("title"),
-            "company": j.get("company_name"),
-            "location": j.get("location"),
-            "risk": j.get("sponsorship_risk"),
-            "open": apply_url(j),
-        } for j in data]
-        n_sponsor = sum(1 for r in rows if r["sponsor"])
+
+        # One table renderer, reused per experience band (or once for the flat
+        # list). Returns True on the first tick change so the caller can rerun.
+        def render_section(subset, key_prefix):
+            rows = [{
+                "id": j.get("id"),
+                "applied": j.get("status") == "Applied",
+                "fresh": FRESH_BADGE.get(j["_freshness"], ""),
+                "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
+                "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+                # Confirmed rows show the real posting date; likely rows have no
+                # trustworthy date, so we show when we FIRST saw it, marked "~".
+                "posted": ((j.get("posted_at") or "")[:10] if j["_freshness"] == "confirmed"
+                           else "~" + (j.get("discovered_at") or "")[:10]) or "—",
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "location": j.get("location"),
+                "risk": j.get("sponsorship_risk"),
+                "open": apply_url(j),
+            } for j in subset]
+            df = pd.DataFrame(rows).set_index("id")
+            editor_key = f"today_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
+            edited = st.data_editor(
+                df, key=editor_key, hide_index=True, use_container_width=True,
+                disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
+                          "location", "risk", "open"],
+                column_order=["applied", "fresh", "status", "sponsor", "posted", "score", "title",
+                              "company", "location", "risk", "open"],
+                column_config={
+                    "applied": st.column_config.CheckboxColumn(
+                        "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
+                    "fresh": st.column_config.TextColumn(
+                        "fresh", help="🔴 CONFIRMED = source stated today's date · "
+                                      "🟡 LIKELY = source hides the date but it first appeared "
+                                      "today on a board we already crawl."),
+                    "posted": st.column_config.TextColumn(
+                        "posted", help="Real posting date (confirmed rows) or ~first-seen date "
+                                       "(likely rows)."),
+                    "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "score": st.column_config.NumberColumn("score", format="%d"),
+                },
+            )
+            status_by_id = {j.get("id"): j.get("status") for j in subset}
+            for jid, r in edited.iterrows():
+                want = bool(r["applied"])
+                cur = status_by_id.get(jid)
+                if want and cur != "Applied":
+                    set_status(int(jid), "Applied"); return True
+                if not want and cur == "Applied":
+                    set_status(int(jid), "New"); return True
+            return False
+
+        n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
         st.caption(f"👉 Tick **✅ Applied?** to mark a job applied · 🔴 CONFIRMED date vs "
                    f"🟡 LIKELY (first seen today) · {n_conf} confirmed / {n_likely} likely · "
                    f"{n_sponsor} sponsor-confirmed in view")
 
-        df = pd.DataFrame(rows).set_index("id")
-        editor_key = "today_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
-        edited = st.data_editor(
-            df, key=editor_key, hide_index=True, use_container_width=True,
-            disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
-                      "location", "risk", "open"],
-            column_order=["applied", "fresh", "status", "sponsor", "posted", "score", "title",
-                          "company", "location", "risk", "open"],
-            column_config={
-                "applied": st.column_config.CheckboxColumn(
-                    "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
-                "fresh": st.column_config.TextColumn(
-                    "fresh", help="🔴 CONFIRMED = source stated today's date · "
-                                  "🟡 LIKELY = source hides the date but it first appeared "
-                                  "today on a board we already crawl."),
-                "posted": st.column_config.TextColumn(
-                    "posted", help="Real posting date (confirmed rows) or ~first-seen date "
-                                   "(likely rows)."),
-                "open": st.column_config.LinkColumn("open", display_text="open ↗"),
-                "score": st.column_config.NumberColumn("score", format="%d"),
-            },
-        )
-        status_by_id = {j.get("id"): j.get("status") for j in data}
-        changed = False
-        for jid, r in edited.iterrows():
-            want = bool(r["applied"])
-            cur = status_by_id.get(jid)
-            if want and cur != "Applied":
-                set_status(int(jid), "Applied"); changed = True
-            elif not want and cur == "Applied":
-                set_status(int(jid), "New"); changed = True
-        if changed:
+        if group_by_exp:
+            # Bucket by stated experience. years_required() reads title+description,
+            # which the API already returned, so this costs nothing extra.
+            yrs_by_id = {j.get("id"): years_required(j) for j in data}
+            changed = False
+            for idx, (label, belongs) in enumerate(EXP_SECTIONS):
+                subset = [j for j in data if belongs(yrs_by_id.get(j.get("id")))]
+                if not subset:
+                    continue
+                n_sp = sum(1 for j in subset if j.get("sponsor_confirmed"))
+                st.subheader(f"{label}  ·  {len(subset)} jobs"
+                             + (f"  ·  {n_sp} ✅ H-1B" if n_sp else ""))
+                if render_section(subset, idx):
+                    changed = True
+                    break
+            if changed:
+                st.rerun()
+        elif render_section(data, "all"):
             st.rerun()
 
     posted_today_feed()
@@ -673,15 +713,7 @@ elif page == "🟢 Live Feed":
         help="Most of the feed scores 0 (off-target roles the filters didn't hard-reject). "
              "Drag to 0 to see absolutely everything.")
 
-    # Experience sections, mirroring the buckets on "Today's Best Jobs". Years are
-    # parsed from the title/description; most entry-level posts state no number at
-    # all, so "not stated" is its own section rather than being silently dropped.
-    EXP_SECTIONS = [
-        ("🎓 No experience stated", lambda y: y is None),
-        ("① 0–2 years", lambda y: y is not None and y <= 2),
-        ("② 3–5 years", lambda y: y is not None and 3 <= y <= 5),
-        ("③ 5+ years", lambda y: y is not None and y > 5),
-    ]
+    # Experience bands come from the shared module-level EXP_SECTIONS.
 
     # Map each job's tracking status to a scannable badge so it's obvious at a
     # glance what you've already actioned vs. what's still untouched.

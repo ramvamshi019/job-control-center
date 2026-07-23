@@ -48,7 +48,13 @@ PRIORITY_INTERVALS = {
     # ~2.5k/hr capacity on the 2GB box -> the high lane saturated the batch and
     # starved the 18k low companies (weeks stale). 3h keeps good-fit companies
     # fresh (8x/day) while leaving capacity to sweep every company within ~24h.
-    "high": timedelta(hours=3),      # confirmed-sponsor / good-fit watchlist
+    # 3h -> 4h (2026-07-23). Seeding USCIS H-1B sponsors grew the high lane to
+    # 4,593, pushing demand to 56,120/day against ~54,000/day capacity (104% —
+    # oversubscribed, so the low lane starts stretching again). At 4h the high
+    # lane is 6x/day instead of 8x, demand drops to ~46,900/day (87%), which
+    # restores headroom AND leaves room to seed more sponsors. Six checks a day
+    # is still well inside the useful window for a job search.
+    "high": timedelta(hours=4),      # confirmed-sponsor / good-fit watchlist
     "medium": timedelta(hours=6),
     "low": timedelta(hours=24),
     "skip": None,  # never

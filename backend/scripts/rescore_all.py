@@ -50,72 +50,81 @@ def main() -> None:
     counts = {"total": 0, "rescored": 0, "protected": 0, "rejected": 0,
               "best": 0, "review": 0}
 
-    # --- Pass 1: READ-ONLY compute. Safe to run while the live crawler writes,
-    # because we don't hold staged ORM updates across its inserts/prunes. ---
-    updates: list[dict] = []
-    with session_scope() as session:
-        companies = {c.id: c for c in session.exec(select(Company)).all()}
-        jobs = session.exec(select(Job)).all()
-        counts["total"] = len(jobs)
+    # Stream jobs in id-range chunks instead of loading the whole table. The DB
+    # is >500k rows; a single select(Job).all() holds every row (plus its
+    # description) in RAM at once and OOM-kills this on the 2 GB box. Each chunk
+    # runs in its OWN short session that also loads ONLY the companies its jobs
+    # reference, so peak memory is bounded by CHUNK regardless of table size —
+    # and short sessions stay safe to run beside the live crawler.
+    CHUNK = 4000
+    last_id = 0
+    while True:
+        with session_scope() as session:
+            jobs = session.exec(
+                select(Job).where(Job.id > last_id).order_by(Job.id).limit(CHUNK)
+            ).all()
+            if not jobs:
+                break
+            last_id = jobs[-1].id
+            cids = {j.company_id for j in jobs if j.company_id}
+            companies = (
+                {c.id: c for c in session.exec(
+                    select(Company).where(Company.id.in_(cids))).all()}
+                if cids else {}
+            )
 
-        for job in jobs:
-            if job.status in PROTECTED:
-                counts["protected"] += 1
-                continue
+            mappings: list[dict] = []
+            for job in jobs:
+                counts["total"] += 1
+                if job.status in PROTECTED:
+                    counts["protected"] += 1
+                    continue
 
-            company = companies.get(job.company_id)
-            status, rejection_reason = "New", ""
+                company = companies.get(job.company_id)
+                status, rejection_reason = "New", ""
 
-            result = filter_engine.evaluate(job)
-            if not result.passed:
-                status, rejection_reason = "Rejected", result.reason
+                result = filter_engine.evaluate(job)
+                if not result.passed:
+                    status, rejection_reason = "Rejected", result.reason
 
-            match_score, fit_reason = scoring_engine.score(job, company)
-            sponsorship_risk, risk_reason = sponsorship_engine.assess(job, company)
-            if sponsorship_risk == "reject" and status != "Rejected":
-                status, rejection_reason = "Rejected", (rejection_reason or risk_reason)
+                match_score, fit_reason = scoring_engine.score(job, company)
+                sponsorship_risk, risk_reason = sponsorship_engine.assess(job, company)
+                if sponsorship_risk == "reject" and status != "Rejected":
+                    status, rejection_reason = "Rejected", (rejection_reason or risk_reason)
 
-            if status != "Rejected":
-                if match_score >= settings.min_good_score and sponsorship_risk in ("low", "medium"):
-                    status = "New"
-                    counts["best"] += 1
+                if status != "Rejected":
+                    if match_score >= settings.min_good_score and sponsorship_risk in ("low", "medium"):
+                        status = "New"
+                        counts["best"] += 1
+                    else:
+                        status = "Need Review"
+                        counts["review"] += 1
                 else:
-                    status = "Need Review"
-                    counts["review"] += 1
-            else:
-                counts["rejected"] += 1
+                    counts["rejected"] += 1
 
-            resume_notes, cover = job.resume_notes, job.cover_letter
-            if status == "New" and match_score >= settings.materials_min_score:
-                try:
-                    resume_notes = resume_tailor.generate(job)
-                    cover = cover_letter.generate(job, include_opt=False)
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("material gen failed for '%s': %s", job.title, exc)
+                resume_notes, cover = job.resume_notes, job.cover_letter
+                if status == "New" and match_score >= settings.materials_min_score:
+                    try:
+                        resume_notes = resume_tailor.generate(job)
+                        cover = cover_letter.generate(job, include_opt=False)
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("material gen failed for '%s': %s", job.title, exc)
 
-            updates.append({
-                "id": job.id, "status": status, "rejection_reason": rejection_reason,
-                "match_score": match_score, "fit_reason": fit_reason,
-                "sponsorship_risk": sponsorship_risk, "risk_reason": risk_reason,
-                "resume_notes": resume_notes, "cover_letter": cover,
-            })
+                mappings.append({
+                    "id": job.id, "status": status, "rejection_reason": rejection_reason,
+                    "match_score": match_score, "fit_reason": fit_reason,
+                    "sponsorship_risk": sponsorship_risk, "risk_reason": risk_reason,
+                    "resume_notes": resume_notes, "cover_letter": cover,
+                })
 
-    # --- Pass 2: WRITE in small batches via id-targeted UPDATEs. A row the
-    # crawler pruned mid-run simply matches 0 rows (no StaleDataError). ---
-    from sqlalchemy import update as sa_update  # noqa: E402
+            # One executemany UPDATE per chunk (keyed on id) — far faster than a
+            # statement per row, and the chunk commits together on scope exit.
+            if mappings:
+                session.bulk_update_mappings(Job, mappings)
+                counts["rescored"] += len(mappings)
 
-    BATCH = 1000
-    for i in range(0, len(updates), BATCH):
-        chunk = updates[i:i + BATCH]
-        try:
-            with session_scope() as session:
-                for u in chunk:
-                    session.execute(
-                        sa_update(Job).where(Job.id == u["id"]).values(
-                            {k: v for k, v in u.items() if k != "id"}))
-            counts["rescored"] += len(chunk)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("batch %d-%d failed, skipping: %s", i, i + len(chunk), exc)
+        log.info("...rescored through id=%d (total=%d, best=%d, review=%d, rejected=%d)",
+                 last_id, counts["total"], counts["best"], counts["review"], counts["rejected"])
 
     log.info(
         "Re-score done. total=%(total)d rescored=%(rescored)d protected=%(protected)d "

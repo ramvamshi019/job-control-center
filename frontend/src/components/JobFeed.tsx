@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/Checkbox"
 import { Slider } from "@/components/ui/Slider"
 import { useJobKeyboardNav } from "@/hooks/useJobKeyboardNav"
 import { fetchJobs, setStatus, type Job, type JobStatus } from "@/lib/api"
-import { cn, daysAgo, formatDate } from "@/lib/utils"
+import { cn, daysAgo, relativeDate } from "@/lib/utils"
 
 const columnHelper = createColumnHelper<Job>()
 
@@ -61,9 +61,9 @@ function ScoreBar({ v }: { v: number }) {
   const tone =
     v >= 60 ? "bg-emerald-500" : v >= 40 ? "bg-primary" : "bg-muted-foreground/40"
   return (
-    <div className="flex items-center gap-2">
-      <div className="tabular-nums w-7 text-right text-xs font-semibold">{v}</div>
-      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+    <div className="flex items-center gap-2.5">
+      <div className="tabular-nums w-8 text-right text-sm font-semibold">{v}</div>
+      <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
         <div className={cn("h-full rounded-full", tone)} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -299,43 +299,59 @@ export function JobFeed(props: JobFeedProps) {
       dateMode === "posted"
         ? columnHelper.accessor("posted_at", {
             header: "Posted",
-            size: 90,
+            size: 96,
             cell: (info) => (
-              <span className="text-xs text-muted-foreground">
-                {formatDate(info.getValue())}
+              <span
+                className="text-xs text-muted-foreground"
+                title={info.getValue() || undefined}
+              >
+                {relativeDate(info.getValue())}
               </span>
             ),
           })
         : columnHelper.accessor("discovered_at", {
             header: "Seen",
-            size: 70,
+            size: 96,
             cell: (info) => (
-              <span className="text-xs text-muted-foreground">
+              <span
+                className="text-xs text-muted-foreground"
+                title={info.getValue() || undefined}
+              >
                 {daysAgo(info.getValue())}
               </span>
             ),
           }),
       columnHelper.accessor("match_score", {
         header: "Score",
-        size: 130,
+        size: 140,
         cell: (info) => <ScoreBar v={info.getValue() ?? 0} />,
       }),
       columnHelper.accessor("title", {
         header: "Title",
-        cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+        size: 380,
+        cell: (info) => (
+          <span className="font-medium" title={info.getValue()}>
+            {info.getValue()}
+          </span>
+        ),
       }),
       columnHelper.accessor("company_name", {
         header: "Company",
-        size: 180,
+        size: 200,
         cell: (info) => (
-          <span className="text-muted-foreground">{info.getValue()}</span>
+          <span className="text-muted-foreground" title={info.getValue()}>
+            {info.getValue()}
+          </span>
         ),
       }),
       columnHelper.accessor("location", {
         header: "Location",
-        size: 200,
+        size: 240,
         cell: (info) => (
-          <span className="truncate text-xs text-muted-foreground">
+          <span
+            className="text-xs text-muted-foreground"
+            title={info.getValue()}
+          >
             {info.getValue()}
           </span>
         ),
@@ -508,7 +524,6 @@ export function JobFeed(props: JobFeedProps) {
                       width: "100%",
                       transform: `translateY(${vr.start}px)`,
                       display: "table",
-                      tableLayout: "fixed",
                     }}
                     className={cn(
                       "border-b border-border/50 cursor-pointer hover:bg-accent/40",

@@ -127,6 +127,46 @@ function FilterField({
   )
 }
 
+/**
+ * "Updated 12s ago" indicator. Auto-ticks every second so Ram can see the
+ * data is live without opening devtools; the underlying refetchInterval is
+ * still what actually refreshes the data (this is just the readout).
+ */
+function LastUpdated({
+  updatedAt,
+  isFetching,
+}: {
+  updatedAt: number
+  isFetching: boolean
+}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+  if (!updatedAt) return null
+  const secs = Math.max(0, Math.floor((now - updatedAt) / 1000))
+  const label =
+    secs < 5
+      ? "just now"
+      : secs < 60
+      ? `${secs}s ago`
+      : `${Math.floor(secs / 60)}m ago`
+  return (
+    <span
+      className="ml-2 rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+      title={
+        isFetching
+          ? "Refreshing…"
+          : "Data auto-refreshes every 60s while the tab is visible"
+      }
+    >
+      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      updated {label}
+    </span>
+  )
+}
+
 export function JobFeed(props: JobFeedProps) {
   const {
     title,
@@ -162,11 +202,12 @@ export function JobFeed(props: JobFeedProps) {
     [minScore, freshDays, orderBy, extraParams]
   )
 
-  const { data = [], isFetching, isLoading, error } = useQuery({
+  // Global QueryClient handles refetchInterval (60s) + refetchOnWindowFocus,
+  // so counts and rows stay live while the tab sits open. Don't override
+  // those here -- per-query options would silently defeat the auto-refresh.
+  const { data = [], dataUpdatedAt, isFetching, isLoading, error } = useQuery({
     queryKey: ["jobs", params],
     queryFn: () => fetchJobs(params),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
   })
 
   const rows = useMemo(
@@ -353,6 +394,7 @@ export function JobFeed(props: JobFeedProps) {
             {isFetching && !isLoading && (
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
+            <LastUpdated updatedAt={dataUpdatedAt} isFetching={isFetching} />
           </div>
           <div className="flex items-center gap-6 text-sm">
             <Kpi label="Matches" value={rows.length} />

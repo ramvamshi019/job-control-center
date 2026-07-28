@@ -23,7 +23,10 @@ export default function PostedToday() {
       defaultMinScore={30}
       defaultFreshDays={1}
       orderBy="discovered_at"
-      defaultSort={[{ id: "discovered_at", desc: true }]}
+      // Client-side sort has to reference a rendered column id. In "posted"
+      // dateMode the rendered date column is posted_at, not discovered_at,
+      // so sort on posted_at here (server order is still discovery-time).
+      defaultSort={[{ id: "posted_at", desc: true }]}
       dateMode="posted"
       showFreshnessSlider={false}
     />

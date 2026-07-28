@@ -44,6 +44,9 @@ from app.crawlers.remoteok import RemoteOKCrawler
 from app.crawlers.arbeitnow import ArbeitnowCrawler
 from app.crawlers.jobspresso import JobspressoCrawler
 from app.crawlers.weworkremotely import WeWorkRemotelyCrawler
+from app.crawlers.teamtailor import TeamtailorCrawler
+from app.crawlers.personio import PersonioCrawler
+from app.crawlers.pinpoint import PinpointCrawler
 from app.crawlers.generic_placeholder import GenericCrawler
 from app.models.company import Company
 from app.utils.logging import get_logger
@@ -80,6 +83,9 @@ CRAWLERS: List[BaseCrawler] = [
     ArbeitnowCrawler(),   # sentinel source: Arbeitnow (EU-heavy; ~0 US currently)
     JobspressoCrawler(),      # sentinel source: Jobspresso RSS (WP Job Manager)
     WeWorkRemotelyCrawler(),  # sentinel source: We Work Remotely RSS
+    TeamtailorCrawler(),  # per-company Teamtailor career sites (keyless jobs.json)
+    PersonioCrawler(),    # per-company Personio career sites (keyless XML feed)
+    PinpointCrawler(),    # per-company Pinpoint boards (keyless postings.json)
     GenericCrawler(),  # keep LAST: matches anything as a fallback.
 ]
 

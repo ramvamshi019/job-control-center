@@ -58,7 +58,13 @@ class Settings(BaseSettings):
     # --- Retention ---
     # Jobs posted more than this many days ago are pruned (and skipped at crawl
     # time) to keep the database light. Jobs you've actioned are always kept.
-    prune_days: int = 10
+    # 2026-07-28: 10 -> 30. Measured age distribution across 25 random low-tier
+    # non-sponsor Ashby/Lever/Greenhouse boards: only 1.5% of their live jobs
+    # were <=10 days old (so 98.5% of real postings from ~2k companies were
+    # silently dropped at ingest, showing them as "dead"); 30 days captures
+    # 23.5% -- a 15x recovery -- while still rejecting the >90d ancient pool
+    # (57%) that's mostly closed reqs. 60d only adds +13pp at 2x storage.
+    prune_days: int = 30
 
     # Confirmed H-1B sponsors get a MUCH longer window. Real postings stay open
     # for months, so a 10-day window was hiding entire good employers: Linear

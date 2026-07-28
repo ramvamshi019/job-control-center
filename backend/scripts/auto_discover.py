@@ -15,7 +15,9 @@ and gets seeded.
 Only ATSes with a public token API can be discovered this way. Paylocity, UKG
 and Oracle HCM are deliberately excluded: their boards are keyed by GUIDs and
 per-tenant hostnames that cannot be derived from a company name, so probing them
-would be pure waste.
+would be pure waste. Workable is also excluded: apply.workable.com is now behind
+a Cloudflare managed challenge (see crawlers/workable.py), so any board found
+here can't actually be crawled -- probing it 23k names/week is wasted traffic.
 
     python scripts/auto_discover.py --dry-run       # report, write nothing
     python scripts/auto_discover.py                 # one pass
@@ -81,15 +83,33 @@ def _ashby(tok: str):
     return len(r.json().get("jobs", []) or []) if r.status_code == 200 else None
 
 
-def _workable(tok: str):
-    r = SESSION.get(f"https://apply.workable.com/api/v1/widget/accounts/{tok}?details=true",
-                    timeout=TIMEOUT)
-    return len(r.json().get("jobs", []) or []) if r.status_code == 200 else None
-
-
 def _recruitee(tok: str):
     r = SESSION.get(f"https://{tok}.recruitee.com/api/offers/", timeout=TIMEOUT)
     return len(r.json().get("offers", []) or []) if r.status_code == 200 else None
+
+
+# BambooHR is the single biggest ATS bucket in the roster (~6.8k companies) yet
+# was never probed here, so it never grew automatically. Its public careers list
+# is keyless and token-derivable, exactly like the others.
+def _bamboohr(tok: str):
+    r = SESSION.get(f"https://{tok}.bamboohr.com/careers/list", timeout=TIMEOUT)
+    return len(r.json().get("result", []) or []) if r.status_code == 200 else None
+
+
+def _teamtailor(tok: str):
+    r = SESSION.get(f"https://{tok}.teamtailor.com/jobs.json", timeout=TIMEOUT)
+    return len(r.json().get("items", []) or []) if r.status_code == 200 else None
+
+
+def _pinpoint(tok: str):
+    r = SESSION.get(f"https://{tok}.pinpointhq.com/postings.json", timeout=TIMEOUT)
+    return len(r.json().get("data", []) or []) if r.status_code == 200 else None
+
+
+# Personio's feed is XML, not JSON: count <position> elements without a parser.
+def _personio(tok: str):
+    r = SESSION.get(f"https://{tok}.jobs.personio.com/xml?language=en", timeout=TIMEOUT)
+    return r.text.count("<position>") if r.status_code == 200 else None
 
 
 PROBES = {
@@ -97,8 +117,11 @@ PROBES = {
     "greenhouse": _greenhouse,
     "lever": _lever,
     "ashby": _ashby,
-    "workable": _workable,
     "recruitee": _recruitee,
+    "bamboohr": _bamboohr,
+    "teamtailor": _teamtailor,
+    "pinpoint": _pinpoint,
+    "personio": _personio,
 }
 
 

@@ -47,6 +47,7 @@ from app.crawlers.weworkremotely import WeWorkRemotelyCrawler
 from app.crawlers.teamtailor import TeamtailorCrawler
 from app.crawlers.personio import PersonioCrawler
 from app.crawlers.pinpoint import PinpointCrawler
+from app.crawlers.amazon import AmazonJobsCrawler
 from app.crawlers.generic_placeholder import GenericCrawler
 from app.models.company import Company
 from app.utils.logging import get_logger
@@ -86,6 +87,7 @@ CRAWLERS: List[BaseCrawler] = [
     TeamtailorCrawler(),  # per-company Teamtailor career sites (keyless jobs.json)
     PersonioCrawler(),    # per-company Personio career sites (keyless XML feed)
     PinpointCrawler(),    # per-company Pinpoint boards (keyless postings.json)
+    AmazonJobsCrawler(),  # sentinel: amazon.jobs public JSON API (big H-1B sponsor)
     GenericCrawler(),  # keep LAST: matches anything as a fallback.
 ]
 

@@ -76,7 +76,11 @@ JOBS_PAGE = "https://www.ycombinator.com/companies/{slug}/jobs"
 SITE = "https://www.ycombinator.com"
 
 # Politeness / bounding. ~1.5k hiring cos; cap how many we hit per run.
-MAX_COMPANIES = 400
+# 2026-07-28: 400 -> 1500 to cover the full hiring pool. Previous cap was
+# leaving ~1,100 YC companies uncrawled per run, and steady-state yield was
+# only 81 jobs / 30d despite YC being one of the highest H-1B sponsor-density
+# feeds we have.
+MAX_COMPANIES = 1500
 
 # Pull the Inertia page-props JSON out of the server-rendered HTML.
 _DATA_PAGE_RE = re.compile(r'data-page="(.*?)"\s*>', re.S)

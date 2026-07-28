@@ -538,8 +538,8 @@ elif page == "🕵️ JobRight Gap":
             df, key=editor_key, hide_index=True, use_container_width=True,
             disabled=["edge", "sponsor", "score", "title", "company", "source",
                       "location", "why", "open"],
-            column_order=["applied", "edge", "sponsor", "score", "title", "company",
-                          "source", "location", "why", "open"],
+            column_order=["edge", "sponsor", "score", "title", "company",
+                          "source", "location", "why", "open", "applied"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?", help="Tick when you've applied — it's marked Applied and drops out."),
@@ -627,8 +627,9 @@ elif page == "🎯 Best Matches":
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "sponsor", "seen", "posted", "score", "title", "company",
                           "location", "risk", "open"],
-                column_order=["applied", "dismiss", "status", "sponsor", "seen", "posted",
-                              "score", "title", "company", "location", "risk", "open"],
+                column_order=["dismiss", "status", "sponsor", "seen", "posted",
+                              "score", "title", "company", "location", "risk",
+                              "open", "applied"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
@@ -764,9 +765,9 @@ elif page == "🎓 Entry Level":
             height=grid_h,
             disabled=["status", "sponsor", "seen", "posted", "score",
                       "title", "company", "location", "open"],
-            column_order=["applied", "dismiss", "block", "status", "sponsor",
+            column_order=["dismiss", "block", "status", "sponsor",
                           "seen", "posted", "score", "title", "company",
-                          "location", "open"],
+                          "location", "open", "applied"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?",
@@ -899,8 +900,9 @@ elif page == "🔴 Posted Today":
                 df, key=editor_key, hide_index=True, use_container_width=True,
                 disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
                           "location", "risk", "open"],
-                column_order=["applied", "dismiss", "fresh", "status", "sponsor", "posted", "score",
-                              "title", "company", "location", "risk", "open"],
+                column_order=["dismiss", "fresh", "status", "sponsor", "posted", "score",
+                              "title", "company", "location", "risk",
+                              "open", "applied"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
@@ -1054,8 +1056,9 @@ elif page == "🟢 Live Feed":
                 df, key=editor_key, hide_index=True, use_container_width=True,
                 disabled=["🔴", "status", "sponsor", "posted", "score",
                           "title", "company", "location", "risk", "open"],
-                column_order=["applied", "🔴", "status", "sponsor", "posted",
-                              "score", "title", "company", "location", "risk", "open"],
+                column_order=["🔴", "status", "sponsor", "posted",
+                              "score", "title", "company", "location", "risk",
+                              "open", "applied"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it leaves the "
@@ -1210,8 +1213,8 @@ elif page == "⚡ Fast Apply":
             df, key="fastapply_ed_" + str(abs(hash(tuple(r["id"] for r in rows)))),
             hide_index=True, use_container_width=True,
             disabled=["sponsor", "score", "title", "company", "location", "ats", "open"],
-            column_order=["applied", "sponsor", "score", "title", "company", "location",
-                          "ats", "open"],
+            column_order=["sponsor", "score", "title", "company", "location",
+                          "ats", "open", "applied"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?", help="Tick once you've actually submitted."),

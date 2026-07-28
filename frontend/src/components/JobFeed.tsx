@@ -445,9 +445,16 @@ export function JobFeed(props: JobFeedProps) {
 
       <div ref={parentRef} className="relative flex-1 overflow-auto">
         {error ? (
-          <div className="flex h-full items-center justify-center text-sm text-destructive">
-            Backend unreachable — check the SSH tunnel:{" "}
-            <code className="ml-2">ssh -L 8000:localhost:8000 root@143.198.188.116</code>
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm">
+            <div className="text-destructive">
+              {(error as Error)?.message || "Something went wrong loading jobs."}
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-md border border-border px-3 py-1 text-xs hover:bg-accent"
+            >
+              Reload
+            </button>
           </div>
         ) : isLoading ? (
           <div className="flex h-full items-center justify-center text-muted-foreground">

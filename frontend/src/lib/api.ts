@@ -51,14 +51,29 @@ function toQuery(params: Record<string, unknown>): string {
   return p.toString() ? `?${p}` : ""
 }
 
+// Same-origin fetches inherit the basic-auth session the user set up when
+// they loaded the SPA. `credentials: "same-origin"` is the default, but we
+// state it explicitly so a future move to a cross-origin API host is a
+// one-line change (`include`) rather than a mystery breakage.
+const AUTH: RequestInit = { credentials: "same-origin" }
+
+async function throwIfBad(r: Response, what: string): Promise<never | void> {
+  if (r.ok) return
+  if (r.status === 401)
+    throw new Error(
+      "Your session expired — reload the page and sign in again."
+    )
+  throw new Error(`${what} failed: ${r.status}`)
+}
+
 export async function fetchJobs(params: ListParams): Promise<Job[]> {
-  const r = await fetch(`/api/jobs/${toQuery(params)}`)
-  if (!r.ok) throw new Error(`GET /jobs failed: ${r.status}`)
+  const r = await fetch(`/api/jobs/${toQuery(params)}`, AUTH)
+  await throwIfBad(r, "GET /jobs")
   return r.json()
 }
 
 export async function fetchJobsCount(params: ListParams): Promise<number> {
-  const r = await fetch(`/api/jobs/count${toQuery(params)}`)
+  const r = await fetch(`/api/jobs/count${toQuery(params)}`, AUTH)
   if (!r.ok) return 0
   const j = await r.json()
   return j.count ?? 0
@@ -66,9 +81,10 @@ export async function fetchJobsCount(params: ListParams): Promise<number> {
 
 export async function setStatus(id: number, status: JobStatus): Promise<void> {
   const r = await fetch(`/api/jobs/${id}/status`, {
+    ...AUTH,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   })
-  if (!r.ok) throw new Error(`status update failed: ${r.status}`)
+  await throwIfBad(r, "status update")
 }

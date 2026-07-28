@@ -56,6 +56,11 @@ def list_jobs(
     discovered_within_hours: Optional[int] = Query(
         None, description="Only jobs first SEEN by the crawler within the last N hours"),
     exclude_rejected: bool = Query(False, description="Hide Rejected jobs (US-only survivors)"),
+    entry_level_only: bool = Query(
+        False,
+        description="Only jobs whose TITLE explicitly signals entry-level "
+                    "(junior/entry/associate/new grad/level I). Ignores match_score "
+                    "-- pulls the raw entry-level pool for volume applying."),
     jobright_tier: Optional[str] = Query(
         None, description="Filter by JobRight-coverage tier: exclusive | likely | common"),
     order_by: str = Query("score", description="score | posted | discovered | exclusivity"),
@@ -98,6 +103,18 @@ def list_jobs(
     if discovered_within_hours:
         cutoff = datetime.utcnow() - timedelta(hours=discovered_within_hours)
         stmt = stmt.where(Job.discovered_at >= cutoff)
+    if entry_level_only:
+        # OR of every entry-level token, ilike so it's case-insensitive.
+        # `%jr%` is deliberately absent -- it substrings into "jrouter", "jr.d",
+        # etc; require an explicit "jr." / "jr " with the trailing separator.
+        entry_terms = (
+            "junior", "entry level", "entry-level", "new grad", "new graduate",
+            "associate", "jr.", "jr ",
+            "engineer i,", "engineer i ", "developer i,", "developer i ",
+            "engineer i)", "developer i)", "level i,", "level 1",
+        )
+        title_or = or_(*[Job.title.ilike(f"%{t}%") for t in entry_terms])
+        stmt = stmt.where(title_or)
 
     if order_by == "posted":
         stmt = stmt.order_by(Job.posted_at.desc())

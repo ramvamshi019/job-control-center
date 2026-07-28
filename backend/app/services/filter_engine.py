@@ -459,8 +459,20 @@ def evaluate(job: Job) -> FilterResult:
             return FilterResult(False, f"Description contains blocked phrase: '{phrase}'")
 
     # 4) Years of experience too high.
-    for rx in YEARS_BLOCK_RE:
-        if rx.search(desc):
-            return FilterResult(False, f"Requires too many years: matched /{rx.pattern}/")
+    # EXEMPTION: if the title itself explicitly names an entry-level role
+    # ("Junior Data Engineer", "Associate SWE", "New Grad SDE", "Engineer I"),
+    # a "5+ years preferred" line in the description is almost always the
+    # generic company-preferred bar, not a real requirement. Applyable at
+    # 0-3yr. We keep the years-block for titles that don't explicitly signal
+    # entry-level (where "5+ years" IS a real gate).
+    ENTRY_TITLE_TOKENS = ("junior", "entry level", "entry-level", "new grad",
+                          "new graduate", "associate", "jr.", "jr ",
+                          "engineer i,", "engineer i ", "developer i,",
+                          "developer i ", "level i,", "level 1")
+    title_is_entry = any(t in title for t in ENTRY_TITLE_TOKENS)
+    if not title_is_entry:
+        for rx in YEARS_BLOCK_RE:
+            if rx.search(desc):
+                return FilterResult(False, f"Requires too many years: matched /{rx.pattern}/")
 
     return FilterResult(True, "")

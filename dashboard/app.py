@@ -336,7 +336,8 @@ else:
 
 page = st.sidebar.radio(
     "Pages",
-    ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🔥 Fresh (apply now)",
+    ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🎓 Entry Level",
+     "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
      "Need Review", "Approved",
      "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats",
@@ -671,6 +672,122 @@ elif page == "🎯 Best Matches":
             st.rerun()
 
     best_matches_feed()
+
+elif page == "🎓 Entry Level":
+    st.header("🎓 Entry Level")
+    st.caption("Every job whose TITLE explicitly signals entry-level — "
+               "**Junior / Entry Level / Associate / New Grad / Engineer I / Level 1**. "
+               "No match-score gate: this is the raw volume pool. Use it "
+               "when you want to apply broadly rather than pick the top match.")
+
+    STATUS_BADGE_EL = {
+        "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
+        "Need Review": "🔍 Review", "New": "🆕 New",
+    }
+
+    c1, c2, c3 = st.columns(3)
+    el_min_score = c1.slider(
+        "Min match score", 0, 90, 0, step=5,
+        help="Default 0 = show all entry-level jobs regardless of match. "
+             "Bump to 30-40 for tighter fit-first list.",
+    )
+    el_fresh_days = c2.slider(
+        "First seen within N days", 0, 60, 30, step=1,
+        help="0 = any age. Entry-level pool is smaller than Best Matches so a "
+             "wider window is fine.",
+    )
+    el_hide_applied = c3.checkbox(
+        "Hide jobs I've already applied to", value=True,
+    )
+
+    def entry_level_feed():
+        params = dict(
+            entry_level_only=True,
+            min_score=el_min_score,
+            exclude_rejected=True,
+            order_by="discovered",
+            limit=3000,
+            slim=True,
+        )
+        if el_fresh_days > 0:
+            params["discovered_within_hours"] = el_fresh_days * 24
+        data = api_get("/jobs/", **params) or []
+        if el_hide_applied:
+            data = [j for j in data if j.get("status") != "Applied"]
+
+        n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
+        m1, m2, m3 = st.columns(3)
+        m1.metric("🎓 Entry-level jobs", len(data))
+        m2.metric("✅ H-1B sponsors", n_sponsor)
+        m3.metric("🆕 New (unreviewed)",
+                  sum(1 for j in data if j.get("status") == "New"))
+        if not data:
+            st.info("No entry-level jobs in this window. Try widening the freshness "
+                    "range to 60 days or dropping the min score.")
+            return
+
+        rows = [{
+            "id": j.get("id"),
+            "applied": j.get("status") == "Applied",
+            "dismiss": False,
+            "block": False,
+            "status": STATUS_BADGE_EL.get(j.get("status"), j.get("status") or ""),
+            "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+            "seen": "~" + (j.get("discovered_at") or "")[:10]
+                    if j.get("discovered_at") else "—",
+            "posted": (j.get("posted_at") or "")[:10] or "—",
+            "score": j.get("match_score"),
+            "title": j.get("title"),
+            "company": j.get("company_name"),
+            "location": j.get("location"),
+            "open": apply_url(j),
+        } for j in data]
+        df = pd.DataFrame(rows).set_index("id")
+        editor_key = "el_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
+        grid_h = min(len(rows) + 1, 30) * 35 + 3
+        edited = st.data_editor(
+            df, key=editor_key, hide_index=True, use_container_width=True,
+            height=grid_h,
+            disabled=["status", "sponsor", "seen", "posted", "score",
+                      "title", "company", "location", "open"],
+            column_order=["applied", "dismiss", "block", "status", "sponsor",
+                          "seen", "posted", "score", "title", "company",
+                          "location", "open"],
+            column_config={
+                "applied": st.column_config.CheckboxColumn(
+                    "✅ Applied?",
+                    help="Tick when you've applied — kept forever, never pruned."),
+                "dismiss": st.column_config.CheckboxColumn(
+                    "🗑️", help="Dismiss this one posting."),
+                "block": st.column_config.CheckboxColumn(
+                    "🚫", help="BLOCK the company. Adds to the blocklist and "
+                              "flips every one of their jobs to Rejected. "
+                              "Reversible via data/company_blocklist.txt."),
+                "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                "score": st.column_config.NumberColumn("score", format="%d"),
+            },
+        )
+
+        status_by_id = {j.get("id"): j.get("status") for j in data}
+        company_by_id = {j.get("id"): j.get("company_name") for j in data}
+        for jid, r in edited.iterrows():
+            cur = status_by_id.get(jid)
+            if bool(r["block"]):
+                cname = company_by_id.get(jid) or ""
+                res = api_post("/companies/block", {"name": cname}) or {}
+                st.toast(f"🚫 Blocked {cname} — {res.get('jobs_flipped_to_rejected', 0)} "
+                         f"jobs Rejected")
+                st.rerun()
+                return
+            if bool(r["dismiss"]):
+                set_status(int(jid), "Archived"); st.rerun(); return
+            want = bool(r["applied"])
+            if want and cur != "Applied":
+                set_status(int(jid), "Applied"); st.rerun(); return
+            if not want and cur == "Applied":
+                set_status(int(jid), "New"); st.rerun(); return
+
+    entry_level_feed()
 
 elif page == "🔴 Posted Today":
     st.header("🔴 Posted Today")

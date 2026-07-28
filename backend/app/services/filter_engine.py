@@ -25,16 +25,19 @@ from app.utils.text import normalize, term_in
 
 # ---- Title kill-words: senior / management roles we don't want ----
 # "senior"/"sr." are deliberately NOT here. They were rejecting ~19,100 jobs on
-# a word, while YEARS_BLOCK below already rejects anything demanding 6+ years --
+# a word, while YEARS_BLOCK below already rejects anything demanding 5+ years --
 # the thing that actually makes a role out of reach. Blocking the title text too
-# threw away "Senior Data Engineer, 3+ years", which is applyable.
-# 2026-07-27: "staff" and "lead " ALSO dropped (Ram wants wider experience /
-# more good-fit volume). Staff/Lead-IC roles are sometimes attainable, and the
-# score gate on Best Matches + the Need-Review triage catch the ones that aren't
-# a fit -- so we no longer hard-reject on the word. What's left (principal/
-# manager/director/architect/head/VP) is management or far-senior, still out.
+# threw away "Senior Data Engineer, 3+ years", which is applyable. Everything
+# still listed here (staff/principal/lead/manager/director/architect/head/VP)
+# implies far more experience than a 0-3yr candidate has, regardless of the
+# stated year count.
+# 2026-07-27: briefly dropped "staff" and "lead " to widen coverage. Reverted
+# 2026-07-28 after the "Posted Today" feed filled with Staff/Sr./Lead titles
+# Ram can't apply to. The 17%-tech-titled "yield" measurement had missed that
+# the tech-titled portion was ALSO senior/staff — technically tech but not
+# applyable at a 0-3yr level. Kept out.
 TITLE_BLOCK = [
-    "principal", "manager",
+    "staff", "principal", "lead ", "manager",
     "director", "architect", "head of", "head,", "vp ", "vice president",
 ]
 
@@ -71,13 +74,14 @@ DESC_BLOCK = [
 ]
 
 # ---- Years-of-experience kill patterns ----
-# 2026-07-27: the 5-year patterns were dropped (Ram wants wider experience).
-# "5+ years" is very often "5+ preferred" and applyable for a strong candidate;
-# 6+ is where it becomes a real stretch, so that's now the floor.
+# 2026-07-28: reverted 6+ back to 5+ (it was briefly loosened 2026-07-27).
+# In practice "5+ years" postings are almost always senior IC roles, not "5+
+# preferred" mid-level ones, and letting them through filled the daily feed
+# with Sr./Senior/Staff titles that then couldn't be filtered downstream.
 YEARS_BLOCK = [
-    r"\b6\+?\s*years", r"\b7\+?\s*years",
+    r"\b5\+?\s*years", r"\b6\+?\s*years", r"\b7\+?\s*years",
     r"\b8\+?\s*years", r"\b9\+?\s*years", r"\b1[0-9]\+?\s*years",
-    r"minimum (of )?6 years", r"at least 6 years",
+    r"minimum (of )?5 years", r"at least 5 years",
 ]
 YEARS_BLOCK_RE = [re.compile(p) for p in YEARS_BLOCK]
 

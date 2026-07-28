@@ -336,7 +336,7 @@ else:
 
 page = st.sidebar.radio(
     "Pages",
-    ["⚡ Fast Apply", "🔎 Find Jobs", "🔥 Fresh (apply now)",
+    ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
      "Need Review", "Approved",
      "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats"],
@@ -554,6 +554,122 @@ elif page == "🕵️ JobRight Gap":
                 set_status(int(jid), "Applied"); changed = True
         if changed:
             st.rerun()
+
+elif page == "🎯 Best Matches":
+    st.header("🎯 Best Matches")
+    st.caption("Your **full applyable backlog** — sponsor-safe, US, on-target roles you "
+               "haven't applied to yet, ranked by match score. Unlike 🔴 Posted Today (last "
+               "24h only), this is the whole open pool to actually work from. Widen or tighten "
+               "with the sliders below. Citizenship/clearance/foreign roles are already excluded.")
+
+    STATUS_BADGE = {
+        "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
+        "Need Review": "🔍 Review", "New": "🆕 New",
+    }
+    c1, c2, c3 = st.columns(3)
+    bm_min_score = c1.slider("Min match score", 0, 90, 40, step=5,
+                             help="Lower surfaces more (weaker) matches; raise for only the "
+                                  "strongest. 40 ≈ solid, 50+ ≈ strong.")
+    bm_fresh_days = c2.slider("First seen within N days", 0, 60, 14, step=1,
+                              help="0 = any age. Filters on when the crawler first SAW the job — "
+                                   "populated for every source, unlike the posted-date used by "
+                                   "Posted Today (which drops iCIMS/SmartRecruiters nulls).")
+    bm_group = c3.checkbox("Group by experience", value=True,
+                           help="Split into experience bands (no-experience-stated · 0–2 · 3–5 · "
+                                "5+ yrs) parsed from each posting. Untick for one flat ranked list.")
+    bm_hide_applied = st.checkbox("Hide jobs I've already applied to", value=True,
+                                  key="bm_hide_applied")
+
+    def best_matches_feed():
+        params = dict(min_score=bm_min_score, exclude_rejected=True, order_by="score",
+                      limit=3000, slim=True)
+        if bm_fresh_days > 0:
+            params["discovered_within_hours"] = bm_fresh_days * 24
+        data = api_get("/jobs/", **params) or []
+        # exclude_rejected already drops Rejected + Archived server-side.
+        if bm_hide_applied:
+            data = [j for j in data if j.get("status") != "Applied"]
+
+        n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
+        m1, m2, m3 = st.columns(3)
+        m1.metric("🎯 Matches", len(data))
+        m2.metric("✅ H-1B sponsors", n_sponsor)
+        m3.metric("🆕 New (unreviewed)", sum(1 for j in data if j.get("status") == "New"))
+        if not data:
+            st.info("No matches in this range — lower the min score or widen the freshness "
+                    "window with the sliders above.")
+            return
+
+        def render_section(subset, key_prefix):
+            rows = [{
+                "id": j.get("id"),
+                "applied": j.get("status") == "Applied",
+                "dismiss": False,
+                "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
+                "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+                "seen": "~" + (j.get("discovered_at") or "")[:10] if j.get("discovered_at") else "—",
+                "posted": (j.get("posted_at") or "")[:10] or "—",
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "location": j.get("location"),
+                "risk": j.get("sponsorship_risk"),
+                "open": apply_url(j),
+            } for j in subset]
+            df = pd.DataFrame(rows).set_index("id")
+            editor_key = f"bm_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
+            # Explicit height so all rows are reachable in ONE grid (up to ~25 visible,
+            # then the grid scrolls internally) instead of the default ~10-row viewport.
+            grid_h = min(len(rows) + 1, 26) * 35 + 3
+            edited = st.data_editor(
+                df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
+                disabled=["status", "sponsor", "seen", "posted", "score", "title", "company",
+                          "location", "risk", "open"],
+                column_order=["applied", "dismiss", "status", "sponsor", "seen", "posted",
+                              "score", "title", "company", "location", "risk", "open"],
+                column_config={
+                    "applied": st.column_config.CheckboxColumn(
+                        "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
+                    "dismiss": st.column_config.CheckboxColumn(
+                        "🗑️", help="Tick to dismiss — files it under 🗑️ Archived and drops it here."),
+                    "seen": st.column_config.TextColumn(
+                        "first seen", help="~date the crawler first saw this posting."),
+                    "posted": st.column_config.TextColumn(
+                        "posted", help="Source-stated posting date (blank for sources that hide it)."),
+                    "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "score": st.column_config.NumberColumn("score", format="%d"),
+                },
+            )
+            status_by_id = {j.get("id"): j.get("status") for j in subset}
+            for jid, r in edited.iterrows():
+                cur = status_by_id.get(jid)
+                if bool(r["dismiss"]):
+                    set_status(int(jid), "Archived"); return True
+                want = bool(r["applied"])
+                if want and cur != "Applied":
+                    set_status(int(jid), "Applied"); return True
+                if not want and cur == "Applied":
+                    set_status(int(jid), "New"); return True
+            return False
+
+        st.caption(f"👉 Tick **✅ Applied?** to mark applied · 🗑️ to dismiss · "
+                   f"{len(data)} matches · {n_sponsor} sponsor-confirmed in view")
+
+        if bm_group:
+            yrs_by_id = {j.get("id"): years_required(j) for j in data}
+            for idx, (label, belongs) in enumerate(EXP_SECTIONS):
+                subset = [j for j in data if belongs(yrs_by_id.get(j.get("id")))]
+                if not subset:
+                    continue
+                n_sp = sum(1 for j in subset if j.get("sponsor_confirmed"))
+                st.subheader(f"{label}  ·  {len(subset)} jobs"
+                             + (f"  ·  {n_sp} ✅ H-1B" if n_sp else ""))
+                if render_section(subset, idx):
+                    st.rerun()
+        elif render_section(data, "all"):
+            st.rerun()
+
+    best_matches_feed()
 
 elif page == "🔴 Posted Today":
     st.header("🔴 Posted Today")

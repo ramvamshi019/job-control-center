@@ -30,17 +30,18 @@ services:
     # uvicorn until the KERNEL OOM-killer fires and shoots an arbitrary victim —
     # sshd or the crawler. With a cap, a runaway can only kill itself and
     # `restart: unless-stopped` brings it straight back. Steady state is ~180 MB.
-    mem_limit: 700m
-    memswap_limit: 1g
+    # 2026-07-27: box resized 2->4 vCPU / 2->8 GB; caps raised to match.
+    mem_limit: 1500m
+    memswap_limit: 2g
     restart: unless-stopped
 
   livewatch:
     build: .
     working_dir: /app/backend
-    # Tuned for a 2-vCPU VPS: fewer workers / smaller batch / longer interval so
-    # the crawler doesn't saturate CPU + the SQLite writer and starve the API.
-    # (On an 8+ core machine you can push this much harder — was 24/600/60.)
-    command: python scripts/live_watch.py --interval 90 --batch 100 --workers 6
+    # 2026-07-27: box resized to 4 vCPU / 8 GB — pushed harder (was 90/100/6 on
+    # the 2-vCPU box). More workers + bigger batch ~doubles crawl throughput to
+    # absorb the expanded company roster; still leaves ~1.5 vCPU for the API.
+    command: python scripts/live_watch.py --interval 60 --batch 200 --workers 12
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
@@ -52,9 +53,9 @@ services:
     # the dashboard's HTTP timeout -> "Read timed out" in the UI. Leaving ~0.8
     # vCPU and the RAM for backend+dashboard keeps the API responsive; the
     # crawler just takes a little longer per wave. Coverage is unchanged.
-    cpus: 1.2
-    mem_limit: 700m
-    memswap_limit: 1g   # cap swap too, else the limit just pushes it to disk
+    cpus: 2.5            # 4-vCPU box: leave ~1.5 vCPU for backend + dashboard
+    mem_limit: 2g
+    memswap_limit: 3g   # cap swap too, else the limit just pushes it to disk
     restart: unless-stopped
     depends_on: [backend]
 
@@ -65,15 +66,15 @@ services:
   discovery:
     build: .
     working_dir: /app/backend
-    command: python scripts/auto_discover.py --loop --every-hours 168 --workers 16
+    command: python scripts/auto_discover.py --loop --every-hours 168 --workers 24
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
     volumes:
       - jcc-data:/app/backend/data/db
-    cpus: 0.5
-    mem_limit: 350m
-    memswap_limit: 500m
+    cpus: 1
+    mem_limit: 700m
+    memswap_limit: 1g
     restart: unless-stopped
     depends_on: [backend]
 

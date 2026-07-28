@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # Pick something unguessable: anyone who knows the topic can read it.
     ntfy_topic: str = ""
 
+    # --- Adzuna aggregator API (optional) ---
+    # Free-tier keys at https://adzuna.com/developer. If either is empty the
+    # crawler skips its whole fetch loop and stays a no-op — no error, no
+    # noise. Free tier is 500 calls/day; the crawler's default query plan
+    # stays well under that.
+    adzuna_app_id: str = ""
+    adzuna_app_key: str = ""
+
     # --- Candidate profile ---
     my_skills: str = "python,sql,aws,etl,spark,airflow,docker"
     my_target_roles: str = "data engineer,cloud engineer,software engineer"

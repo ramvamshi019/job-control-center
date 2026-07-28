@@ -30,7 +30,7 @@ export interface Job {
   risk_reason?: string | null
 }
 
-interface ListParams {
+export type ListParams = {
   min_score?: number
   exclude_rejected?: boolean
   order_by?: "score" | "discovered_at" | "posted_at"
@@ -38,6 +38,7 @@ interface ListParams {
   slim?: boolean
   discovered_within_hours?: number
   status?: JobStatus | JobStatus[]
+  [key: string]: unknown
 }
 
 function toQuery(params: Record<string, unknown>): string {

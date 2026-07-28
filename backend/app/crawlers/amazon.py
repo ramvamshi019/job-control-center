@@ -47,14 +47,24 @@ SITE = "https://www.amazon.jobs"
 SEARCH = f"{SITE}/en/search.json"
 
 # Ram's actual target scope. Broad-but-bounded queries keep the fetch fast
-# while covering data/software/ML/cloud/security tech categories.
+# while covering data/software/ML/cloud/security tech categories. Expanded
+# 6->13 queries 2026-07-28 to widen coverage per Ram's ask; dedup on Amazon's
+# own posting id in fetch_jobs() means the extra queries add ~200-400 unique
+# jobs per crawl without duplicating what the first 6 already found.
 QUERIES = (
     "data engineer",
     "software engineer",
+    "software development engineer",
     "machine learning",
+    "applied scientist",
     "cloud engineer",
     "backend engineer",
+    "python developer",
+    "java developer",
     "sre",
+    "devops engineer",
+    "security engineer",
+    "systems engineer",
 )
 
 PAGE_SIZE = 100

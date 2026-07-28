@@ -339,7 +339,8 @@ page = st.sidebar.radio(
     ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
      "Need Review", "Approved",
-     "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats"],
+     "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats",
+     "📋 Daily Audit"],
 )
 
 # Quick live counter in the sidebar (jobs first seen in the last 24h).
@@ -1259,3 +1260,79 @@ elif page == "Stats":
         st.write(s["top_companies"])
         st.subheader("Common rejection reasons")
         st.write(s["common_rejection_reasons"])
+
+elif page == "📋 Daily Audit":
+    st.header("📋 Daily Audit")
+    st.caption("Automatically generated at 06:00 UTC by scripts/daily_audit.py — "
+               "roster growth, capacity, discovery rate, dead-weight, sponsor "
+               "coverage, top rejections and storage. Use it to see whether the "
+               "pipeline is delivering more jobs each day.")
+
+    listing = api_get("/audit/") or {"reports": [], "latest": None}
+    dates = listing.get("reports") or []
+    latest = listing.get("latest")
+
+    if not dates:
+        st.warning(
+            "No audit reports on disk yet — the cron fires at 06:00 UTC each day. "
+            "Run this once to backfill today:\n\n"
+            "```\ndocker exec -w /app/backend job-control-center-backend-1 "
+            "python scripts/daily_audit.py\n```"
+        )
+    else:
+        # Date picker: default to latest, let user browse history.
+        col1, col2 = st.columns([1, 3])
+        pick = col1.selectbox("Report", dates, index=0,
+                              help=f"{len(dates)} report(s) on disk. Newest first.")
+        col2.caption(f"Latest available: **{latest}** · "
+                     f"tomorrow's report writes at 06:00 UTC.")
+
+        # Two views: the pre-rendered text (fast to skim), and structured
+        # JSON tables (for numeric comparison across days).
+        tab_text, tab_data = st.tabs(["📝 Report", "🔢 Structured"])
+
+        with tab_text:
+            txt = api_get(f"/audit/{pick}/txt") or {}
+            body = txt.get("content", "")
+            if body:
+                st.code(body, language="text")
+                st.download_button("Download .txt", body, file_name=f"audit-{pick}.txt")
+            else:
+                st.error(f"No text report available for {pick}.")
+
+        with tab_data:
+            data = api_get(f"/audit/{pick}") or {}
+            if not data:
+                st.error(f"No JSON report available for {pick}.")
+            else:
+                cap = data.get("capacity") or {}
+                roster = data.get("roster") or {}
+                disc = data.get("discovery_24h") or {}
+                dead = data.get("dead_weight") or {}
+                sp = data.get("sponsors") or {}
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Active companies", roster.get("active_total", "—"))
+                c2.metric("Scans/day", f"{cap.get('demand_per_day', 0):,}")
+                c3.metric("Jobs discovered (24h)", disc.get("total", "—"))
+                c4.metric("Sponsors (score≥50)", sp.get("confirmed_total", "—"))
+
+                st.subheader("Roster by tier")
+                st.bar_chart(pd.Series(roster.get("by_tier") or {}))
+
+                st.subheader("Discovery last 24h by ATS")
+                by_ats = disc.get("by_ats") or {}
+                if by_ats:
+                    st.bar_chart(pd.Series(by_ats))
+
+                st.subheader("Dead-weight (active low-tier, 0 jobs ever)")
+                st.metric("Total", dead.get("total", 0))
+                st.metric("Prune-ready (>60d, still 0 after 24h)", dead.get("prune_ready_confident", 0))
+
+                st.subheader("Top rejection reasons (24h)")
+                rej = data.get("top_rejections_24h") or []
+                if rej:
+                    st.dataframe(pd.DataFrame(rej), use_container_width=True, hide_index=True)
+
+                with st.expander("Raw JSON"):
+                    st.json(data)

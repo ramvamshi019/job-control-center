@@ -40,7 +40,10 @@ from app.services.scheduler import PRIORITY_INTERVALS  # noqa: E402
 # higher post 4-vCPU resize; kept as a headline for the report.
 CAPACITY_PER_DAY = 54_000
 
-REPORT_DIR = Path("data/reports")
+# Reports live INSIDE the persistent db volume so container rebuilds don't
+# wipe the history. The volume is jcc-data:/app/backend/data/db, so anything
+# under data/db/ survives -- data/reports/ (the old path) did not.
+REPORT_DIR = Path("data/db/reports")
 DB_PATH = "data/db/jobs.db"
 
 

@@ -24,20 +24,19 @@ from app.models.job import Job
 from app.utils.text import normalize, term_in
 
 # ---- Title kill-words: senior / management roles we don't want ----
-# "senior"/"sr." are deliberately NOT here. They were rejecting ~19,100 jobs on
-# a word, while YEARS_BLOCK below already rejects anything demanding 5+ years --
-# the thing that actually makes a role out of reach. Blocking the title text too
-# threw away "Senior Data Engineer, 3+ years", which is applyable. Everything
-# still listed here (staff/principal/lead/manager/director/architect/head/VP)
-# implies far more experience than a 0-3yr candidate has, regardless of the
-# stated year count.
-# 2026-07-27: briefly dropped "staff" and "lead " to widen coverage. Reverted
-# 2026-07-28 after the "Posted Today" feed filled with Staff/Sr./Lead titles
-# Ram can't apply to. The 17%-tech-titled "yield" measurement had missed that
-# the tech-titled portion was ALSO senior/staff — technically tech but not
-# applyable at a 0-3yr level. Kept out.
+# 2026-07-28: "senior" and "sr." ADDED. Prior comment said keeping them out
+# preserved the "Senior XYZ, 3+ years" outlier that's applyable at 0-3yr, and
+# that YEARS_BLOCK would catch the true 5+yr ones. In practice the queue was
+# 33% Senior titles (4,440 of 13,468 visible jobs) because most Senior job
+# descriptions don't literally state "5 years" — they say "senior-level
+# experience" or nothing quantified — so YEARS_BLOCK couldn't catch them and
+# they drowned out the ~700 actual entry-level/junior/associate/intern jobs
+# Ram *can* apply to. Trade-off: a few hundred applyable "Senior X, 3+ yr"
+# outliers per month are lost; in exchange the daily feed is browsable.
+# 2026-07-27: briefly dropped "staff" and "lead " to widen coverage; reverted
+# same-day because Staff/Lead-IC titles are almost never a fit at 0-3yr.
 TITLE_BLOCK = [
-    "staff", "principal", "lead ", "manager",
+    "senior", "sr.", "sr ", "staff", "principal", "lead ", "manager",
     "director", "architect", "head of", "head,", "vp ", "vice president",
 ]
 

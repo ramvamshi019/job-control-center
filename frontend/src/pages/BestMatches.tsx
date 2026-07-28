@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   createColumnHelper,
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { Checkbox } from "@/components/ui/Checkbox"
 import { Slider } from "@/components/ui/Slider"
+import { useJobKeyboardNav } from "@/hooks/useJobKeyboardNav"
 import { fetchJobs, setStatus, type Job, type JobStatus } from "@/lib/api"
 import { cn, daysAgo } from "@/lib/utils"
 
@@ -105,6 +106,24 @@ export default function BestMatches() {
       ctx?.prev.forEach(([k, v]) => qc.setQueryData(k, v))
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+  })
+
+  // Keyboard navigation: j/k to move, a to apply, x to archive, o/Enter to open.
+  const onApply = useCallback(
+    (id: number) => mut.mutate({ id, status: "Applied" }),
+    [mut]
+  )
+  const onArchive = useCallback(
+    (id: number) => mut.mutate({ id, status: "Archived" }),
+    [mut]
+  )
+  const onOpen = useCallback((url: string) => {
+    if (url) window.open(url, "_blank", "noopener,noreferrer")
+  }, [])
+  const { focusedIndex, setFocusedIndex } = useJobKeyboardNav(rows, {
+    onApply,
+    onArchive,
+    onOpen,
   })
 
   const cols = useMemo(
@@ -220,6 +239,13 @@ export default function BestMatches() {
     overscan: 12,
   })
 
+  // Whenever the keyboard-driven focus index changes, make sure that row is
+  // actually in view. Without this, `j` past the bottom scrolls the browser
+  // window instead of the virtualized scroll container.
+  useEffect(() => {
+    virtualizer.scrollToIndex(focusedIndex, { align: "auto" })
+  }, [focusedIndex, virtualizer])
+
   const totalSponsor = rows.filter((r) => r.sponsor_confirmed).length
   const totalNew = rows.filter((r) => r.status === "New").length
 
@@ -319,9 +345,11 @@ export default function BestMatches() {
             >
               {virtualizer.getVirtualItems().map((vr) => {
                 const row = table.getRowModel().rows[vr.index]
+                const isFocused = vr.index === focusedIndex
                 return (
                   <tr
                     key={row.id}
+                    onClick={() => setFocusedIndex(vr.index)}
                     style={{
                       position: "absolute",
                       top: 0,
@@ -331,7 +359,10 @@ export default function BestMatches() {
                       display: "table",
                       tableLayout: "fixed",
                     }}
-                    className="border-b border-border/50 hover:bg-accent/40"
+                    className={cn(
+                      "border-b border-border/50 cursor-pointer hover:bg-accent/40",
+                      isFocused && "bg-accent/60 ring-1 ring-inset ring-primary/50"
+                    )}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td

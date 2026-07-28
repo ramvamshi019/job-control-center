@@ -18,7 +18,11 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session
+
+from app.database import get_session
+from app.services import registry
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -70,3 +74,18 @@ def get_report_text(date: str) -> dict:
     if not p:
         raise HTTPException(404, f"No text report for {date}")
     return {"date": date, "content": p.read_text()}
+
+
+@router.get("/registry/stats")
+def registry_stats_endpoint(session: Session = Depends(get_session)) -> dict:
+    """Live registry roster snapshot: active / archived / by tier / by ATS /
+    hiring in the last 24h. Cheap enough to serve on every dashboard render."""
+    return registry.registry_stats(session)
+
+
+@router.get("/registry/preview")
+def registry_preview(session: Session = Depends(get_session)) -> dict:
+    """Dry-run the maintenance sweep: what a `--apply` would change.
+    Purely read-only; never writes."""
+    delta = registry.compute_deltas(session, dry_run=True)
+    return delta.as_dict()

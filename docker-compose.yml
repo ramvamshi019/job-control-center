@@ -67,16 +67,22 @@ services:
     build: .
     working_dir: /app/backend
     # Each weekly pass: (1) refresh the sources feed from GitHub / Wikipedia
-    # into a JSONL under the persistent db volume, then (2) run auto_discover
-    # against it. Fingerprints seed websites for hidden ATS tenants and
-    # name-probes anything new against the 9 token APIs. The `until` loop
-    # keeps the container up between passes (was --loop, moved into shell
-    # so the two steps stay chained).
+    # into a JSONL under the persistent db volume, (2) run auto_discover
+    # against it, (3) run registry_maintenance to re-tier active hirers and
+    # archive dead-weight. Wrapped in a shell loop so the three steps stay
+    # chained and one failure doesn't skip the others.
     command: >
       sh -c '
       while true; do
         python scripts/harvest_company_sources.py --out /app/backend/data/db/discovered_companies.jsonl || true;
         python scripts/auto_discover.py --workers 24 --seed-file /app/backend/data/db/discovered_companies.jsonl || true;
+        # DRY-RUN only in the automated loop — the first run would promote
+        # ~4,300 companies at once, which spikes crawl demand past the
+        # measured ceiling. To actually apply the changes:
+        #   docker exec -w /app/backend job-control-center-backend-1 \
+        #     python scripts/registry_maintenance.py --apply
+        # Watch the Registry tab in the dashboard for the current delta.
+        python scripts/registry_maintenance.py || true;
         echo "next discovery pass in 168h"; sleep 604800;
       done
       '

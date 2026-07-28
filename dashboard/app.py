@@ -1287,9 +1287,12 @@ elif page == "📋 Daily Audit":
         col2.caption(f"Latest available: **{latest}** · "
                      f"tomorrow's report writes at 06:00 UTC.")
 
-        # Two views: the pre-rendered text (fast to skim), and structured
-        # JSON tables (for numeric comparison across days).
-        tab_text, tab_data = st.tabs(["📝 Report", "🔢 Structured"])
+        # Three views: the pre-rendered text (fast to skim), structured
+        # JSON tables (for numeric comparison across days), and the live
+        # registry snapshot + would-be maintenance changes.
+        tab_text, tab_data, tab_registry = st.tabs(
+            ["📝 Report", "🔢 Structured", "🏢 Registry"]
+        )
 
         with tab_text:
             txt = api_get(f"/audit/{pick}/txt") or {}
@@ -1336,3 +1339,60 @@ elif page == "📋 Daily Audit":
 
                 with st.expander("Raw JSON"):
                     st.json(data)
+
+        with tab_registry:
+            st.caption("Live company roster snapshot + a preview of what "
+                       "the weekly registry-maintenance sweep would change. "
+                       "Numbers here refresh on page load — they're not tied "
+                       "to the daily audit file.")
+
+            stats = api_get("/audit/registry/stats") or {}
+            preview = api_get("/audit/registry/preview") or {}
+
+            r1, r2, r3, r4 = st.columns(4)
+            r1.metric("Active companies", stats.get("active_total", "—"))
+            r2.metric("Archived", stats.get("archived", "—"))
+            r3.metric("Hiring last 24h", stats.get("companies_hiring_last_24h", "—"))
+            r4.metric("Would-be changes",
+                      (preview.get("promoted", 0)
+                       + preview.get("demoted", 0)
+                       + preview.get("archived", 0)))
+
+            st.subheader("Roster by tier")
+            by_tier = stats.get("by_tier") or {}
+            if by_tier:
+                st.bar_chart(pd.Series(by_tier))
+
+            st.subheader("Lifecycle distribution")
+            lc = preview.get("lifecycle_counts") or {}
+            if lc:
+                st.bar_chart(pd.Series(lc))
+                st.caption(
+                    "discovered = just added, awaiting first crawl · "
+                    "validated = queued · hiring = produced ≥1 job in 30d · "
+                    "dormant = active board, no jobs in 30d · "
+                    "archived = is_active=False"
+                )
+
+            st.subheader("Weekly maintenance preview (dry-run)")
+            st.caption(
+                "What `registry_maintenance.py --apply` would change this "
+                "week. Runs automatically inside the discovery container "
+                "after harvest + auto_discover. Sponsors are never "
+                "auto-archived — hiring velocity is a proxy, not a substitute."
+            )
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Promote → higher tier", preview.get("promoted", 0))
+            c2.metric("Demote → lower tier", preview.get("demoted", 0))
+            c3.metric("Archive", preview.get("archived", 0))
+
+            st.subheader("Active companies by ATS platform")
+            by_ats = stats.get("by_ats") or {}
+            if by_ats:
+                # Top 20 by count for readability.
+                top = dict(sorted(by_ats.items(),
+                                   key=lambda kv: -(kv[1] or 0))[:20])
+                st.dataframe(
+                    pd.DataFrame(top.items(), columns=["ATS", "companies"]),
+                    hide_index=True, use_container_width=True,
+                )

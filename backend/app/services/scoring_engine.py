@@ -49,6 +49,41 @@ OFF_DOMAIN_SIGNALS = [
     "hardware", "fpga", "asic", "mechanical", "electrical", "rf engineer",
 ]
 
+# HARD WRONG-SUBROLE: titles that CONTAIN a target keyword but are actually a
+# completely different job. Big penalty (-80) so they never crack the top of
+# Best Matches even when everything else lines up.
+HARD_WRONG_SUBROLE = [
+    # Physical data-center infrastructure, not data pipelines.
+    "data center engineer", "data center engineering",
+    # PhD-track research roles; typically not applyable at 0-3 yrs.
+    "applied scientist", "research scientist", "research engineer",
+    # Sales / customer-facing engineering, not data.
+    "solutions architect", "solution architect", "sales engineer",
+    "customer engineer", "field engineer", "forward deployed",
+    # Product / TPM-style roles that aren't hands-on engineering.
+    "technical product manager", "program manager", "product manager",
+]
+
+# SOFT wrong-subrole: level markers where the role is still adjacent but the
+# seniority makes it a stretch. Smaller penalty (-15) so these still surface
+# but don't dominate the top slot.
+SOFT_WRONG_SUBROLE = [
+    "engineer ii", "developer ii", "sde ii", "swe ii",
+    "engineer iii", "developer iii", "sde iii", "swe iii",
+]
+
+# EXACT-TARGET-TITLE bonuses: a job whose title IS one of these (not merely
+# contains them buried in a longer title) is exactly the role you're hunting.
+# Applied on top of the DATA_ROLE_SIGNALS boost.
+EXACT_TARGET_TITLES = [
+    "data engineer", "junior data engineer", "associate data engineer",
+    "data engineer i", "software data engineer",
+    "analytics engineer", "junior analytics engineer",
+    "data platform engineer", "data infrastructure engineer",
+    "ml engineer", "machine learning engineer", "junior ml engineer",
+    "etl developer", "etl engineer",
+]
+
 # Your CORE stack — weighted higher than generic skills so a real data/backend
 # match outranks a role that merely name-drops "git"/"docker".
 CORE_SKILLS = [
@@ -117,6 +152,28 @@ def score(job: Job, company: Optional[Company] = None) -> Tuple[int, str]:
     if _contains_any(title, DATA_ROLE_SIGNALS):
         total += 15
         reasons.append("+15 data-engineering role")
+
+    # EXACT-TARGET-TITLE boost: your literal target title -- "Data Engineer",
+    # "Analytics Engineer", "ML Engineer" -- outranks anything that just
+    # contains those words buried in a longer specialty title.
+    if _contains_any(title, EXACT_TARGET_TITLES):
+        total += 20
+        reasons.append("+20 exact target title")
+
+    # HARD WRONG-SUBROLE: title looks on-target but is definitively off-track
+    # (Data Center Engineering, Applied Scientist, Solutions Architect). Big
+    # penalty so "Data Engineer, Data Center Engineering" nets ~20 total
+    # regardless of how strong the other signals are.
+    if _contains_any(title, HARD_WRONG_SUBROLE):
+        total -= 80
+        reasons.append("-80 wrong sub-role (data-center / research-scientist / architect / PM)")
+
+    # SOFT WRONG-SUBROLE: level markers ("SDE II") that make the role a stretch
+    # but not disqualifying at 0-3yr. Only fires when the title also passes the
+    # HARD check so we don't double-penalize.
+    if _contains_any(title, SOFT_WRONG_SUBROLE) and not _contains_any(title, HARD_WRONG_SUBROLE):
+        total -= 15
+        reasons.append("-15 II/III level (typically 3-5+ yrs at Amazon-scale)")
 
     # A core skill named right in the TITLE (e.g. "Data Engineer - Spark") is a
     # much stronger fit signal than the same word buried in the description.

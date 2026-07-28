@@ -48,39 +48,68 @@ log = get_logger("seed_h1b_sponsors")
 
 SRC = "/tmp/h1b_merged.csv"
 
+# 2026-07-28: USCIS' newer FY2026 export uses different column headers
+# ("Employer (Petitioner) Name", "New Employment Approval", etc.) and the
+# XLSX-to-CSV conversion preserves them. Accept both the old schema
+# (employer_name / initial_approval / continuing_approval) AND the new one.
+_APPROVAL_COLS_OLD = ("initial_approval", "continuing_approval")
+_APPROVAL_COLS_NEW = (
+    "New Employment Approval", "Continuation Approval",
+    "Change with Same Employer Approval", "New Concurrent Approval",
+    "Change of Employer Approval", "Amended Approval",
+)
+_NAME_COLS = ("employer_name", "Employer (Petitioner) Name", "Employer")
 
-def load_sponsor_approvals() -> dict[str, tuple[str, int]]:
+
+def _first_present(row: dict, keys: tuple) -> str:
+    for k in keys:
+        if k in row:
+            return row.get(k) or ""
+    return ""
+
+
+def load_sponsor_approvals(src_path: str | None = None) -> dict[str, tuple[str, int]]:
     """normalized employer name -> (display_name, total_approvals). Mirrors
-    enrich_h1b's aggregation so scores match."""
-    if not os.path.exists(SRC):
+    enrich_h1b's aggregation so scores match. Handles both the older
+    /tmp/h1b_merged.csv schema and the newer FY2026 USCIS export headers."""
+    src = src_path or SRC
+    if not os.path.exists(src):
         raise SystemExit(
-            f"Missing {SRC} -- download the USCIS H-1B Employer Data Hub CSV "
-            f"first (same file enrich_h1b.py uses).")
+            f"Missing {src} -- download the USCIS H-1B Employer Data Hub "
+            f"CSV/XLSX first.")
     approvals: dict[str, int] = {}
     display: dict[str, str] = {}
     rows = 0
-    with open(SRC, newline="", encoding="utf-8", errors="ignore") as f:
-        for r in csv.DictReader(f):
+    with open(src, newline="", encoding="utf-8", errors="ignore") as f:
+        reader = csv.DictReader(f)
+        cols_new = [c for c in _APPROVAL_COLS_NEW if c in (reader.fieldnames or [])]
+        cols_old = [c for c in _APPROVAL_COLS_OLD if c in (reader.fieldnames or [])]
+        active_cols = cols_new or cols_old
+        if not active_cols:
+            raise SystemExit(
+                f"{src} has none of the expected approval columns "
+                f"({_APPROVAL_COLS_OLD + _APPROVAL_COLS_NEW}); check headers.")
+        for r in reader:
             rows += 1
-            raw = r.get("employer_name") or ""
+            raw = _first_present(r, _NAME_COLS).strip()
             key = norm(raw)
             if not key:
                 continue
             a = 0
-            for col in ("initial_approval", "continuing_approval"):
+            for col in active_cols:
                 try:
                     a += int(float(r.get(col) or 0))
                 except (TypeError, ValueError):
                     pass
             approvals[key] = approvals.get(key, 0) + a
-            # Keep the first (usually cleanest) display spelling we saw.
-            display.setdefault(key, raw.strip())
+            display.setdefault(key, raw)
     log.info("read %d USCIS rows -> %d distinct sponsor employers", rows, len(approvals))
     return {k: (display[k], approvals[k]) for k in approvals}
 
 
-def one_pass(min_approvals: int, dry_run: bool, workers: int, limit: int) -> dict:
-    sponsors = load_sponsor_approvals()
+def one_pass(min_approvals: int, dry_run: bool, workers: int, limit: int,
+             src: str | None = None, priority: str = "high") -> dict:
+    sponsors = load_sponsor_approvals(src)
 
     with session_scope() as s:
         companies = s.exec(select(Company)).all()
@@ -142,7 +171,7 @@ def one_pass(min_approvals: int, dry_run: bool, workers: int, limit: int) -> dic
             batch.append(Company(
                 name=name, career_url=tok, ats_type=ats,
                 h1b_history_score=score_for(appr),
-                priority="high",  # confirmed sponsor -> crawl often
+                priority=priority,  # override with --priority medium (6h) etc.
                 is_active=True,
                 notes=f"h1b-seeded {datetime.utcnow():%Y-%m-%d}; "
                       f"{appr} USCIS approvals; {n} live postings"))
@@ -162,8 +191,15 @@ def main() -> int:
                     help="minimum USCIS approvals to treat a name as a real sponsor")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--limit", type=int, default=0, help="cap employers probed (testing)")
+    ap.add_argument("--src", default=None,
+                    help="path to CSV (default /tmp/h1b_merged.csv). Accepts both "
+                         "the legacy employer_name/initial_approval schema and the "
+                         "newer FY2026 USCIS export headers.")
+    ap.add_argument("--priority", default="high", choices=["high", "medium", "low"],
+                    help="tier to insert new companies at. high=4h, medium=6h, low=24h.")
     a = ap.parse_args()
-    one_pass(a.min_approvals, a.dry_run, a.workers, a.limit)
+    one_pass(a.min_approvals, a.dry_run, a.workers, a.limit,
+             src=a.src, priority=a.priority)
     return 0
 
 

@@ -61,6 +61,12 @@ def list_jobs(
         description="Only jobs whose TITLE explicitly signals entry-level "
                     "(junior/entry/associate/new grad/level I). Ignores match_score "
                     "-- pulls the raw entry-level pool for volume applying."),
+    tech_only: Optional[bool] = Query(
+        None,
+        description="Tri-state: true = only tech-titled roles (SWE / data / cloud "
+                    "/ ML / infra / QA / security etc.), false = only NON-tech, "
+                    "None = both. Uses the same allowlist filter_engine.TECH_TITLE "
+                    "uses at ingest, so the two views stay in sync."),
     jobright_tier: Optional[str] = Query(
         None, description="Filter by JobRight-coverage tier: exclusive | likely | common"),
     order_by: str = Query("score", description="score | posted | discovered | exclusivity"),
@@ -115,6 +121,16 @@ def list_jobs(
         )
         title_or = or_(*[Job.title.ilike(f"%{t}%") for t in entry_terms])
         stmt = stmt.where(title_or)
+    if tech_only is not None:
+        # Use the SAME allowlist filter_engine applies at ingest -- so the two
+        # views stay in sync and you never see a title here that the filter
+        # would've labelled non-tech.
+        from app.services.filter_engine import TECH_TITLE
+        tech_or = or_(*[Job.title.ilike(f"%{t}%") for t in TECH_TITLE])
+        if tech_only:
+            stmt = stmt.where(tech_or)
+        else:
+            stmt = stmt.where(~tech_or)
 
     if order_by == "posted":
         stmt = stmt.order_by(Job.posted_at.desc())

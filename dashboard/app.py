@@ -685,7 +685,7 @@ elif page == "🎓 Entry Level":
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     el_min_score = c1.slider(
         "Min match score", 0, 90, 0, step=5,
         help="Default 0 = show all entry-level jobs regardless of match. "
@@ -696,7 +696,16 @@ elif page == "🎓 Entry Level":
         help="0 = any age. Entry-level pool is smaller than Best Matches so a "
              "wider window is fine.",
     )
-    el_hide_applied = c3.checkbox(
+    el_scope = c3.radio(
+        "Role type",
+        ["Tech only", "Non-tech only", "Both"],
+        index=0, horizontal=False,
+        help="Tech = SWE / data / cloud / ML / infra / QA / security -- the "
+             "same allowlist the filter uses at ingest. Non-tech surfaces the "
+             "'Associate Attorney' / 'Junior Marketing' style entries the "
+             "filter normally hides. Both = no title-role filter.",
+    )
+    el_hide_applied = c4.checkbox(
         "Hide jobs I've already applied to", value=True,
     )
 
@@ -709,6 +718,11 @@ elif page == "🎓 Entry Level":
             limit=3000,
             slim=True,
         )
+        if el_scope == "Tech only":
+            params["tech_only"] = "true"
+        elif el_scope == "Non-tech only":
+            params["tech_only"] = "false"
+        # else "Both" -> tech_only omitted, no title-role filter
         if el_fresh_days > 0:
             params["discovered_within_hours"] = el_fresh_days * 24
         data = api_get("/jobs/", **params) or []

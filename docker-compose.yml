@@ -61,31 +61,18 @@ services:
 
   # Grows the COMPANY list, which livewatch never does — it only pulls new jobs
   # from companies already known. Without this the roster stayed frozen from the
-  # initial seed (2026-06-17) for over a month. Sleeps ~all week, so its cost is
-  # a few minutes of network per pass; capped anyway so it can't disturb the API.
+  # initial seed (2026-06-17) for over a month. Now a *multi-source* loop
+  # (discovery_loop.py) running each source at its own useful cadence:
+  #   HN Job Stories       every 10 min  (~30-item rolling live feed)
+  #   HN Who Is Hiring     every  6 hrs  (catches new posts to current thread)
+  #   YC directory         every 24 hrs  (yc-oss/api mirror, refreshed daily)
+  #   Weekly harvest       every  7 days (existing auto_discover + maintenance)
+  # Sources are all idempotent, memory-bounded (rolling futures window), and
+  # each is try/except-guarded so one broken source can't take down the loop.
   discovery:
     build: .
     working_dir: /app/backend
-    # Each weekly pass: (1) refresh the sources feed from GitHub / Wikipedia
-    # into a JSONL under the persistent db volume, (2) run auto_discover
-    # against it, (3) run registry_maintenance to re-tier active hirers and
-    # archive dead-weight. Wrapped in a shell loop so the three steps stay
-    # chained and one failure doesn't skip the others.
-    command: >
-      sh -c '
-      while true; do
-        python scripts/harvest_company_sources.py --out /app/backend/data/db/discovered_companies.jsonl || true;
-        python scripts/auto_discover.py --workers 24 --seed-file /app/backend/data/db/discovered_companies.jsonl || true;
-        # DRY-RUN only in the automated loop — the first run would promote
-        # ~4,300 companies at once, which spikes crawl demand past the
-        # measured ceiling. To actually apply the changes:
-        #   docker exec -w /app/backend job-control-center-backend-1 \
-        #     python scripts/registry_maintenance.py --apply
-        # Watch the Registry tab in the dashboard for the current delta.
-        python scripts/registry_maintenance.py || true;
-        echo "next discovery pass in 168h"; sleep 604800;
-      done
-      '
+    command: python scripts/discovery_loop.py
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db

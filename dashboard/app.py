@@ -575,7 +575,7 @@ page = st.sidebar.radio(
     "Pages",
     ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🎓 Entry Level",
      "🔥 Fresh (apply now)",
-     "🕵️ JobRight Gap", "🔴 Posted Today", "📆 Last 24 Hours",
+     "🕵️ JobRight Gap", "🎯 Sponsors Watchlist", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
      "📊 Analytics", "📬 Inbox", "🔙 Undo", "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
@@ -740,6 +740,113 @@ elif page == "🔥 Fresh (apply now)":
         st.info("Nothing posted in this window yet — widen the window or check back soon.")
     for job in data[:150]:
         render_job_card(job, actions=("Approve", "Review", "Reject"))
+
+elif page == "🎯 Sponsors Watchlist":
+    st.header("🎯 Sponsors Watchlist")
+    st.caption("**Every confirmed H-1B sponsor job you haven't applied to yet**, ranked "
+               "by match score. This is where you should spend your morning triage time — "
+               "sponsor-confirmed = the company has real USCIS approval history, dramatically "
+               "raising your conversion odds vs cold applications to unknown-sponsor rows.")
+
+    STATUS_BADGE_SW = {
+        "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
+        "Need Review": "🔍 Review", "New": "🆕 New",
+    }
+    c1, c2, c3 = st.columns(3)
+    sw_min_score = c1.slider("Min match score", 0, 90, 30, step=5, key="sw_min_score",
+                             help="30 = default; raise for tighter fit, lower for broader queue.")
+    sw_fresh_days = c2.slider("Discovered within N days", 0, 90, 30, step=5, key="sw_fresh_days",
+                              help="0 = any age. Sponsor jobs are worth pursuing even older, "
+                                   "but recency matters for callback rates.")
+    sw_group = c3.checkbox("Group by experience", value=True, key="sw_group")
+
+    def sponsors_watchlist_feed():
+        params = dict(min_score=sw_min_score, exclude_rejected=True,
+                      order_by="score", limit=3000, slim=True)
+        if sw_fresh_days > 0:
+            params["discovered_within_hours"] = sw_fresh_days * 24
+        data = filter_feed(api_get("/jobs/", **params))
+        # THE core filter: sponsor-confirmed only.
+        data = [j for j in data if j.get("sponsor_confirmed")]
+        # Never show already-applied on this page (whole point is TRIAGE).
+        data = [j for j in data if j.get("status") not in ("Applied", "Archived")]
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("🎯 Sponsor jobs", len(data))
+        m2.metric("🆕 New (strong)", sum(1 for j in data if j.get("status") == "New"))
+        m3.metric("🔍 Need review", sum(1 for j in data if j.get("status") == "Need Review"))
+        m4.metric("Avg score", f"{sum(j.get('match_score') or 0 for j in data)//len(data)}" if data else "—")
+
+        if not data:
+            st.info("Nothing sponsor-confirmed matches these filters. Lower min-score or "
+                    "widen the discovery window with the sliders above.")
+            return
+
+        def render_sw(subset, key_prefix):
+            rows = [{
+                "id": j.get("id"),
+                "applied": False,   # This page hides Applied, so always start unticked
+                "dismiss": False,
+                "status": STATUS_BADGE_SW.get(j.get("status"), j.get("status") or ""),
+                "posted": (j.get("posted_at") or "")[:10]
+                          or ("~" + (j.get("discovered_at") or "")[:10]),
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "location": j.get("location"),
+                "sponsor_score": j.get("sponsor_score", 0),
+                "risk": j.get("sponsorship_risk"),
+                "open": apply_url(j),
+                "referral": referral_url(j),
+            } for j in subset]
+            df = pd.DataFrame(rows).set_index("id")
+            grid_h = min(len(rows) + 1, 26) * 35 + 3
+            editor_key = f"sw_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
+            edited = st.data_editor(
+                df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
+                disabled=["status", "posted", "score", "title", "company", "location",
+                          "sponsor_score", "risk", "open", "referral"],
+                column_order=["dismiss", "status", "sponsor_score", "posted", "score",
+                              "title", "company", "location", "risk", "open",
+                              "referral", "applied"],
+                column_config={
+                    "applied": st.column_config.CheckboxColumn(
+                        "✅ Applied?", help="Tick when you've applied — drops from this list."),
+                    "dismiss": st.column_config.CheckboxColumn(
+                        "🗑️", help="Tick to dismiss — files under 🗑️ Deleted and drops from feeds."),
+                    "sponsor_score": st.column_config.NumberColumn(
+                        "sponsor", format="%d",
+                        help="Company H-1B history score (higher = more USCIS approvals)."),
+                    "posted": st.column_config.TextColumn(
+                        "posted", help="Real posting date (or ~first-seen if source hides it)."),
+                    "score": st.column_config.NumberColumn("score", format="%d"),
+                    "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "referral": st.column_config.LinkColumn(
+                        "🤝 referral", display_text="LinkedIn ↗",
+                        help="LinkedIn people search for company + role — DM 1st-degree "
+                             "for a warm intro BEFORE applying."),
+                },
+            )
+            status_by_id = {j.get("id"): j.get("status") for j in subset}
+            return handle_grid_edits(edited, status_by_id)
+
+        st.caption(f"👉 {len(data)} sponsor-confirmed jobs open · sorted by score · "
+                   f"tick **✅ Applied?** or **🗑️** to file · **🤝 referral** links open "
+                   f"LinkedIn people search")
+
+        if sw_group:
+            yrs_by_id = {j.get("id"): years_required(j) for j in data}
+            for idx, (label, belongs) in enumerate(EXP_SECTIONS):
+                subset = [j for j in data if belongs(yrs_by_id.get(j.get("id")))]
+                if not subset:
+                    continue
+                st.subheader(f"{label}  ·  {len(subset)} jobs")
+                if render_sw(subset, idx):
+                    st.rerun()
+        elif render_sw(data, "all"):
+            st.rerun()
+
+    sponsors_watchlist_feed()
 
 elif page == "🕵️ JobRight Gap":
     st.header("🕵️ JobRight Gap")

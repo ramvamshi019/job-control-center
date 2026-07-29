@@ -43,6 +43,7 @@ from sqlalchemy import text  # noqa: E402
 
 from app.database import session_scope, engine  # noqa: E402
 from app.models.company import Company  # noqa: E402
+from app.utils.ats import detect_ats  # noqa: E402  -- shared ATS URL patterns
 from app.utils.logging import get_logger  # noqa: E402
 from enrich_h1b import norm  # noqa: E402
 
@@ -55,19 +56,6 @@ log = get_logger("seed_hn")
 HN = requests.Session()
 HN.headers["User-Agent"] = "JobControlCenter/1.0 (+personal-job-search; hn-seeder)"
 HN.mount("https://", HTTPAdapter(pool_connections=32, pool_maxsize=32))
-
-ATS_PATTERNS = [
-    ("greenhouse",      re.compile(r"(?:boards|job-boards)\.greenhouse\.io/([a-zA-Z0-9_-]+)", re.I)),
-    ("lever",           re.compile(r"jobs\.lever\.co/([a-zA-Z0-9_-]+)", re.I)),
-    ("ashby",           re.compile(r"jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)", re.I)),
-    ("workday",         re.compile(r"([a-zA-Z0-9_-]+)\.wd\d+\.myworkdayjobs\.com", re.I)),
-    ("icims",           re.compile(r"careers[-_]?([a-zA-Z0-9_-]+)\.icims\.com", re.I)),
-    ("bamboohr",        re.compile(r"([a-zA-Z0-9_-]+)\.bamboohr\.com", re.I)),
-    ("smartrecruiters", re.compile(r"jobs\.smartrecruiters\.com/([a-zA-Z0-9_-]+)", re.I)),
-    ("workable",        re.compile(r"apply\.workable\.com/([a-zA-Z0-9_-]+)", re.I)),
-    ("rippling",        re.compile(r"ats\.rippling\.com/([a-zA-Z0-9_-]+)", re.I)),
-    ("recruitee",       re.compile(r"([a-zA-Z0-9_-]+)\.recruitee\.com", re.I)),
-]
 
 # Hosts that appear in HN comments but aren't the employer's careers page.
 _SKIP_HOSTS = (
@@ -125,12 +113,10 @@ def _parse(comment: dict) -> dict | None:
     name = name.split(" (")[0].split(" - ")[0].strip()
     if not name:
         return None
-    for ats, pat in ATS_PATTERNS:
-        m = pat.search(text)
-        if m:
-            slug = m.group(1)
-            if slug and len(slug) < 60:
-                return {"name": name, "ats": ats, "career_url": slug}
+    hit = detect_ats(text)
+    if hit:
+        ats, slug = hit
+        return {"name": name, "ats": ats, "career_url": slug}
     for url in re.findall(r"https?://[^\s<>\"')]+", text):
         host_m = re.match(r"https?://([^/]+)", url)
         if not host_m:

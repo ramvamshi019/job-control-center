@@ -362,23 +362,68 @@ def apply_url(job: dict) -> str:
     return u
 
 
-def referral_url(job: dict) -> str:
-    """LinkedIn people-search URL for finding a warm intro at the target company.
-    Strips level/seniority words from the title so the search returns employees
-    at any level in the same role area -- widens the hit set considerably vs.
-    a literal "Senior Software Engineer II" query. Users must be logged into
-    LinkedIn for the search to actually rank by connection degree."""
-    from urllib.parse import quote as _q
-    company = (job.get("company_name") or "").strip()
-    title = (job.get("title") or "").strip()
+def _simplify_title(title: str) -> str:
+    """Strip level/seniority words from a job title so LinkedIn people search
+    returns employees at ANY level in the same role area -- widens the hit
+    set considerably vs. a literal 'Senior Software Engineer II' query."""
     simple = re.sub(
         r"\b(senior|sr\.?|junior|jr\.?|staff|principal|lead|manager|director|"
         r"associate|entry.?level|new.?grad|intern(ship)?|i{1,3}\b|iv|v|\d{1,2})\b",
         " ", title, flags=re.I)
-    simple = re.sub(r"\s+", " ", simple).strip() or "engineer"
-    keywords = f"{company} {simple}"
+    return re.sub(r"\s+", " ", simple).strip() or "engineer"
+
+
+def referral_url(job: dict) -> str:
+    """Primary LinkedIn people-search URL. Kept for backwards compat with
+    existing pages -- newer code should use referral_search_urls() for
+    the multi-angle 3-search set."""
+    from urllib.parse import quote as _q
+    company = (job.get("company_name") or "").strip()
+    keywords = f"{company} {_simplify_title(job.get('title') or '')}"
     return ("https://www.linkedin.com/search/results/people/?"
             f"keywords={_q(keywords)}&origin=GLOBAL_SEARCH_HEADER")
+
+
+def referral_search_urls(job: dict, school: str = "") -> dict:
+    """Three complementary LinkedIn searches for warm-intro discovery:
+
+      role      -- people currently at the company doing this role.
+                   Best for peer referrals ("hey I'm applying, could you
+                   forward my resume to hiring manager?").
+      recruiter -- people at the company with 'recruiter' / 'talent'
+                   in title. Direct outreach to the hiring pipeline.
+      alumni    -- same-school people at the company. Historically the
+                   highest-response-rate cold outreach on LinkedIn.
+                   Skipped when we don't know the user's school.
+
+    Returns {kind: url}. Empty dict entries are fine -- caller decides
+    which to render.
+    """
+    from urllib.parse import quote as _q
+    company = (job.get("company_name") or "").strip()
+    simple = _simplify_title(job.get("title") or "")
+    base = "https://www.linkedin.com/search/results/people/?origin=GLOBAL_SEARCH_HEADER&keywords="
+    urls = {
+        "role":      base + _q(f"{company} {simple}"),
+        "recruiter": base + _q(f"{company} recruiter OR talent OR sourcer"),
+    }
+    if school:
+        urls["alumni"] = base + _q(f"{company} {school}")
+    return urls
+
+
+def referral_intro_message(job: dict, my_name: str = "there") -> str:
+    """Auto-drafted LinkedIn DM the user can paste when reaching out for
+    a referral. Keeps it short (LinkedIn char cap) and specific to the
+    role. Meant to be a starting draft -- user personalizes 1-2 lines."""
+    title = (job.get("title") or "the role").strip()
+    company = (job.get("company_name") or "your team").strip()
+    return (
+        f"Hi! I saw {company} is hiring for {title} and I'm applying "
+        f"this week. Wondering if you'd be open to a quick chat about "
+        f"the team + what makes candidates stand out -- happy to send "
+        f"my resume over too. Either way, thanks so much!\n\n— {my_name}"
+    )
 
 
 # --- Feed hygiene: hide rows the user can't act on ---------------------------
@@ -1875,6 +1920,25 @@ elif page == "Applied":
                    "the company you might know for a warm intro. Send the follow-up email "
                    "AFTER you've reached out to a connection — recruiters recognize referrals "
                    "and prioritize them.")
+
+        # ---- Referral outreach kit: pre-drafted DMs + multi-angle search links ----
+        with st.expander("💬 Referral outreach kit — pre-drafted LinkedIn DMs per applied job"):
+            st.caption("Copy the message, click a search link, DM someone. Referral apps "
+                       "get 5-10x more callbacks than cold ones -- this is the biggest "
+                       "single lift on your response rate.")
+            for _, row in df.sort_values("days_ago", ascending=False).head(20).iterrows():
+                job_row = row.to_dict()
+                title = job_row.get("title") or "(no title)"
+                company = job_row.get("company_name") or "?"
+                with st.container(border=True):
+                    st.markdown(f"**{title}** — {company}  ·  applied {int(job_row.get('days_ago', 0))}d ago")
+                    urls = referral_search_urls(job_row)
+                    link_bits = [
+                        f"[👥 role]({urls['role']})",
+                        f"[🎯 recruiter]({urls['recruiter']})",
+                    ]
+                    st.markdown("Search LinkedIn: " + "  ·  ".join(link_bits))
+                    st.code(referral_intro_message(job_row, my_name), language="text")
 
 elif page == "Rejected":
     st.header("Rejected")

@@ -35,6 +35,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import islice as _islice
 from datetime import datetime
 
 import requests
@@ -218,23 +219,38 @@ def main() -> int:
     started = time.time()
     hits: list[dict] = []
     done = 0
+    # BOUNDED WINDOW pattern -- earlier version built all 40k futures upfront
+    # ({ex.submit(...) for ...}), which held each name's (session ref + response
+    # buffers as it landed) in memory simultaneously and blew a 1.5G container
+    # cgroup at 48 workers. Instead we keep a rolling window sized to workers*4:
+    # at any moment ~64 futures pending, ~1MB each = ~64MB. Same total probes,
+    # same throughput, no OOM.
+    from concurrent.futures import FIRST_COMPLETED, wait
+    it = iter(todo)
+    window_size = args.workers * 4
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        futures = {ex.submit(_probe_one, n, a): (n, a) for n, a in todo}
-        for fut in as_completed(futures):
-            done += 1
-            try:
-                res = fut.result()
-            except Exception:
-                res = None
-            if res and (res["ats"], res["career_url"].lower()) not in known_boards:
-                hits.append(res)
-                known_boards.add((res["ats"], res["career_url"].lower()))
-            if done % 500 == 0:
-                elapsed = time.time() - started
-                rate = done / max(1, elapsed)
-                remain = (len(todo) - done) / max(0.1, rate)
-                log.info("  %d/%d probed, %d hits (%.1f/s, ~%.0f min left)",
-                         done, len(todo), len(hits), rate, remain / 60)
+        pending = {ex.submit(_probe_one, n, a) for n, a in _islice(it, window_size)}
+        while pending:
+            just_done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for fut in just_done:
+                done += 1
+                try:
+                    res = fut.result()
+                except Exception:
+                    res = None
+                if res and (res["ats"], res["career_url"].lower()) not in known_boards:
+                    hits.append(res)
+                    known_boards.add((res["ats"], res["career_url"].lower()))
+                if done % 500 == 0:
+                    elapsed = time.time() - started
+                    rate = done / max(1, elapsed)
+                    remain = (len(todo) - done) / max(0.1, rate)
+                    log.info("  %d/%d probed, %d hits (%.1f/s, ~%.0f min left)",
+                             done, len(todo), len(hits), rate, remain / 60)
+                # Top up: keep the window full while more work remains
+                nxt = next(it, None)
+                if nxt is not None:
+                    pending.add(ex.submit(_probe_one, *nxt))
 
     log.info("probe complete: %d/%d names -> %d ATS hits", done, len(todo), len(hits))
 

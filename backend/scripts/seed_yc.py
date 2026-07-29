@@ -28,7 +28,8 @@ import csv
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
+from itertools import islice as _islice
 from datetime import datetime
 
 import requests
@@ -102,23 +103,32 @@ def main() -> int:
     started = time.time()
     hits: list[dict] = []
     done = 0
+    # Bounded rolling window -- see seed_uscis_url_guess.py comment. Keeps only
+    # workers*4 futures in flight at once so we can't OOM on any input size.
+    it = iter(todo)
+    window_size = args.workers * 4
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        futures = {ex.submit(_probe, n, w): (n, w) for n, w in todo}
-        for fut in as_completed(futures):
-            done += 1
-            try:
-                res = fut.result()
-            except Exception:  # noqa: BLE001
-                res = None
-            if res and (res["ats"], res["career_url"].lower()) not in known_boards:
-                hits.append(res)
-                known_boards.add((res["ats"], res["career_url"].lower()))
-            if done % 250 == 0:
-                elapsed = time.time() - started
-                rate = done / max(1, elapsed)
-                remain = (len(todo) - done) / max(0.1, rate)
-                log.info("  %d/%d probed, %d hits (%.1f/s, ~%.0f min left)",
-                         done, len(todo), len(hits), rate, remain / 60)
+        pending = {ex.submit(_probe, n, w) for n, w in _islice(it, window_size)}
+        while pending:
+            just_done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for fut in just_done:
+                done += 1
+                try:
+                    res = fut.result()
+                except Exception:  # noqa: BLE001
+                    res = None
+                if res and (res["ats"], res["career_url"].lower()) not in known_boards:
+                    hits.append(res)
+                    known_boards.add((res["ats"], res["career_url"].lower()))
+                if done % 250 == 0:
+                    elapsed = time.time() - started
+                    rate = done / max(1, elapsed)
+                    remain = (len(todo) - done) / max(0.1, rate)
+                    log.info("  %d/%d probed, %d hits (%.1f/s, ~%.0f min left)",
+                             done, len(todo), len(hits), rate, remain / 60)
+                nxt = next(it, None)
+                if nxt is not None:
+                    pending.add(ex.submit(_probe, *nxt))
 
     log.info("probe complete: %d/%d -> %d ATS hits", done, len(todo), len(hits))
     if not hits:

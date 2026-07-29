@@ -36,6 +36,7 @@ from app.services import (
     scoring_engine,
     sponsorship_engine,
 )
+from app.utils.geo import is_non_us_location
 from app.utils.logging import get_logger
 
 log = get_logger("scheduler")
@@ -122,9 +123,16 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
     # Split into genuinely-new vs already-stored. Re-seeing a stored job is the
     # proof that the req is still open, so stamp last_seen_at on it — that, not
     # age, is what later distinguishes a live posting from a ghost.
-    new_jobs, reseen = [], 0
+    new_jobs, reseen, dropped_geo = [], 0, 0
     now = datetime.utcnow()
     for j in jobs:
+        # Ingest-side US filter: multi-country ATSes (SR/Workday/Greenhouse/etc.)
+        # don't filter by country, so foreign postings leak in. Drop them before
+        # dedupe/enrich/score to save DB writes + downstream work. Mirrors the
+        # dashboard's own `is_non_us` so behavior is symmetric.
+        if is_non_us_location(j.location):
+            dropped_geo += 1
+            continue
         existing = dedupe.find_duplicate(session, j)
         if existing is None:
             new_jobs.append(j)
@@ -133,6 +141,7 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
             session.add(existing)
             reseen += 1
     summary["reseen"] = reseen
+    summary["dropped_geo"] = dropped_geo
     enrich = getattr(crawler, "enrich_posted_date", None)
     if enrich and new_jobs:
         with ThreadPoolExecutor(max_workers=8) as ex:

@@ -350,10 +350,26 @@ def is_non_us(job: dict) -> bool:
     return False
 
 
+@st.cache_data(ttl=60)
+def _frozen_companies() -> set[str]:
+    """Names of companies user marked as ❄️ frozen (recent layoffs, hiring freeze).
+    Refreshes every 60s. Frozen = priority='skip' -- the crawler already stops
+    pulling from them; this cache lets the dashboard hide their existing stored
+    jobs from discovery views too."""
+    data = api_get("/companies/") or []
+    return {(c.get("name") or "").lower() for c in data
+            if (c.get("priority") or "").lower() == "skip"}
+
+
 def hide_from_feed(job: dict) -> bool:
     """Rows that shouldn't appear on discovery pages: aggregators you can't
-    apply through (Cloudflare-walled) or postings clearly outside the US."""
-    return is_walled(job) or is_non_us(job)
+    apply through (Cloudflare-walled), postings clearly outside the US, or
+    jobs at companies you've marked ❄️ frozen (recent layoffs / hiring freeze).
+    """
+    if is_walled(job) or is_non_us(job):
+        return True
+    name = (job.get("company_name") or "").lower()
+    return bool(name) and name in _frozen_companies()
 
 
 def filter_feed(jobs: list) -> list:
@@ -426,7 +442,7 @@ page = st.sidebar.radio(
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
-     "📬 Inbox", "⚙️ Gmail Settings",
+     "📬 Inbox", "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
      "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats",
      "📋 Daily Audit"],
@@ -2054,3 +2070,108 @@ elif page == "📬 Inbox":
             "preview": (m.get("snippet") or "")[:140],
         } for m in sorted(filtered, key=lambda x: x.get("received_at") or "", reverse=True)]
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+elif page == "❄️ Frozen Companies":
+    st.header("❄️ Frozen Companies")
+    st.caption("Mark companies as **frozen** when you see layoffs / hiring freeze news. "
+               "Frozen companies get `priority=skip` (the crawler stops pulling from them) "
+               "AND their existing stored jobs are hidden from every discovery view (Posted "
+               "Today, Best Matches, Fast Apply, etc.). Keeps you from wasting applications "
+               "on companies that just froze. Unfreeze anytime to bring them back.")
+
+    all_cos = api_get("/companies/") or []
+    frozen = sorted([c for c in all_cos if (c.get("priority") or "").lower() == "skip"],
+                    key=lambda c: (c.get("name") or "").lower())
+    non_frozen = [c for c in all_cos if (c.get("priority") or "").lower() != "skip"]
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("❄️ Frozen", len(frozen))
+    m2.metric("Active roster", len(non_frozen))
+    m3.metric("Total", len(all_cos))
+
+    st.subheader("① Freeze a company")
+    tab_search, tab_bulk = st.tabs(["🔎 Search & mark", "📋 Bulk paste"])
+
+    with tab_search:
+        q = st.text_input("Search company name",
+                          placeholder="e.g. meta, coinbase, stripe...",
+                          key="freeze_search")
+        if q and len(q) >= 2:
+            ql = q.lower()
+            hits = [c for c in non_frozen if ql in (c.get("name") or "").lower()][:20]
+            if not hits:
+                st.info(f"No non-frozen company matches '{q}'.")
+            else:
+                st.caption(f"Top {len(hits)} matches — click ❄️ to freeze:")
+                for c in hits:
+                    col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+                    col1.write(f"**{c.get('name')}**")
+                    col2.write(f"{c.get('ats_type', '') or '—'}")
+                    col3.write(f"priority: {c.get('priority', '')}")
+                    if col4.button("❄️ Freeze", key=f"fr_{c['id']}"):
+                        stamp = datetime.utcnow().strftime("%Y-%m-%d")
+                        api_patch(f"/companies/{c['id']}", {
+                            "priority": "skip",
+                            "notes": ((c.get("notes") or "")
+                                      + f" | ❄️ frozen {stamp} (layoffs/freeze)").strip(" |"),
+                        })
+                        st.cache_data.clear()
+                        st.rerun()
+
+    with tab_bulk:
+        st.caption("Paste multiple company names (one per line OR comma-separated) — "
+                   "we'll fuzzy-match each and freeze all matches.")
+        blob = st.text_area("Company names", key="freeze_bulk",
+                            placeholder="Meta\nCoinbase\nBooking.com, DocuSign, Snap")
+        if st.button("❄️ Freeze all matches") and blob.strip():
+            names = [n.strip() for line in blob.splitlines() for n in line.split(",")]
+            names = [n for n in names if n]
+            frozen_here, missing = [], []
+            stamp = datetime.utcnow().strftime("%Y-%m-%d")
+            for name in names:
+                nl = name.lower()
+                m = next((c for c in non_frozen if nl in (c.get("name") or "").lower()), None)
+                if not m:
+                    missing.append(name); continue
+                api_patch(f"/companies/{m['id']}", {
+                    "priority": "skip",
+                    "notes": ((m.get("notes") or "")
+                              + f" | ❄️ frozen {stamp} (bulk)").strip(" |"),
+                })
+                frozen_here.append(m.get("name"))
+            st.cache_data.clear()
+            st.success(f"Froze {len(frozen_here)} companies: {', '.join(frozen_here[:8])}"
+                       + ("…" if len(frozen_here) > 8 else ""))
+            if missing:
+                st.warning(f"No match for: {', '.join(missing[:10])}"
+                           + ("…" if len(missing) > 10 else ""))
+            st.rerun()
+
+    st.divider()
+    st.subheader(f"② Currently frozen ({len(frozen)})")
+    if not frozen:
+        st.info("Nothing frozen yet. When you see layoffs news, freeze the company here "
+                "and its jobs stop appearing in your feeds.")
+    else:
+        rows = [{
+            "id": c["id"],
+            "unfreeze": False,
+            "name": c.get("name"),
+            "ats": c.get("ats_type") or "—",
+            "notes": (c.get("notes") or "")[:80],
+        } for c in frozen]
+        df = pd.DataFrame(rows).set_index("id")
+        edited = st.data_editor(
+            df, key=f"frozen_ed_{len(frozen)}", hide_index=True, use_container_width=True,
+            disabled=["name", "ats", "notes"],
+            column_config={
+                "unfreeze": st.column_config.CheckboxColumn(
+                    "🔥 Unfreeze",
+                    help="Tick to remove from frozen list — company returns to normal crawl rotation."),
+            },
+        )
+        for jid, r in edited.iterrows():
+            if bool(r["unfreeze"]):
+                api_patch(f"/companies/{int(jid)}", {"priority": "low"})
+                st.cache_data.clear()
+                st.rerun()

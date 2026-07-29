@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -461,7 +461,7 @@ page = st.sidebar.radio(
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
-     "📬 Inbox", "⚙️ Gmail Settings", "❄️ Frozen Companies",
+     "📊 Analytics", "📬 Inbox", "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
      "Applied", "🗑️ Deleted", "Rejected", "Companies", "Stats",
      "📋 Daily Audit"],
@@ -2106,6 +2106,166 @@ elif page == "📬 Inbox":
             "preview": (m.get("snippet") or "")[:140],
         } for m in sorted(filtered, key=lambda x: x.get("received_at") or "", reverse=True)]
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+elif page == "📊 Analytics":
+    st.header("📊 Application Analytics")
+    st.caption("The feedback loop: what's actually working? Applies over time, response "
+               "rates per source, funnel from applied → response → interview. Requires "
+               "**Gmail integration** for response tracking (⚙️ Gmail Settings). Without "
+               "it, this page only shows applied counts.")
+
+    # Pull applied jobs + all matched Gmail messages.
+    applied = api_get("/jobs/", status="Applied", limit=3000) or []
+    msgs = api_get("/gmail/messages", limit=2000) or []
+    # Index messages by job_id -> list of {classification, received_at}
+    msg_by_job: dict[int, list[dict]] = {}
+    for m in msgs:
+        jid = m.get("job_id")
+        if jid is None: continue
+        msg_by_job.setdefault(jid, []).append(m)
+
+    if not applied:
+        st.info("Nothing applied yet — go apply to a few jobs first, then this page "
+                "will show your funnel + response rates.")
+    else:
+        # ---- top-line metrics ----
+        n_total = len(applied)
+        n_with_response = sum(1 for j in applied if j.get("id") in msg_by_job)
+        n_interview = sum(1 for j in applied
+                          if any(m.get("classification") == "interview"
+                                 for m in msg_by_job.get(j.get("id"), [])))
+        n_reject = sum(1 for j in applied
+                       if any(m.get("classification") == "rejection"
+                              for m in msg_by_job.get(j.get("id"), [])))
+        n_ack = sum(1 for j in applied
+                    if any(m.get("classification") == "ack"
+                           for m in msg_by_job.get(j.get("id"), [])))
+        response_rate = (n_with_response * 100 // n_total) if n_total else 0
+        interview_rate = (n_interview * 100 // n_total) if n_total else 0
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Total applied", n_total)
+        m2.metric("Any response", f"{n_with_response} ({response_rate}%)")
+        m3.metric("🎯 Interviews", n_interview, help=f"{interview_rate}% of applied")
+        m4.metric("❌ Rejections", n_reject)
+        m5.metric("📥 Acks only", n_ack)
+
+        if not msg_by_job:
+            st.info("💡 No recruiter responses tracked yet. Set up Gmail integration "
+                    "in ⚙️ Gmail Settings to auto-detect responses in your inbox.")
+
+        st.divider()
+
+        # ---- applies-per-day (last 30 days) ----
+        st.subheader("📅 Applies per day (last 30 days)")
+        today = datetime.now(timezone.utc).date()
+        thirty_ago = today - timedelta(days=30)
+        by_day: dict = {}
+        for j in applied:
+            u = _parse_dt(j.get("updated_at"))
+            if not u: continue
+            d = u.date()
+            if d < thirty_ago: continue
+            by_day[d] = by_day.get(d, 0) + 1
+        # Fill in zero days so the chart is continuous
+        days = [thirty_ago + timedelta(days=i) for i in range(31)]
+        chart_df = pd.DataFrame({"date": days,
+                                 "applied": [by_day.get(d, 0) for d in days]})
+        st.bar_chart(chart_df.set_index("date"), height=220)
+
+        st.divider()
+
+        # ---- funnel by source ----
+        st.subheader("🎯 Funnel by source")
+        st.caption("Which crawler sources are actually converting? A high applied count "
+                   "with a low response rate = you're wasting time on that source.")
+        by_src: dict[str, dict] = {}
+        for j in applied:
+            src = j.get("source") or "unknown"
+            b = by_src.setdefault(src, {"applied": 0, "responded": 0,
+                                        "interviews": 0, "rejections": 0})
+            b["applied"] += 1
+            resp = msg_by_job.get(j.get("id"), [])
+            if resp:
+                b["responded"] += 1
+                if any(m.get("classification") == "interview" for m in resp):
+                    b["interviews"] += 1
+                if any(m.get("classification") == "rejection" for m in resp):
+                    b["rejections"] += 1
+        src_rows = [{
+            "source": s,
+            "applied": v["applied"],
+            "responded": v["responded"],
+            "interviews": v["interviews"],
+            "rejections": v["rejections"],
+            "response_rate_%": (v["responded"] * 100 // v["applied"]) if v["applied"] else 0,
+            "interview_rate_%": (v["interviews"] * 100 // v["applied"]) if v["applied"] else 0,
+        } for s, v in sorted(by_src.items(), key=lambda kv: -kv[1]["applied"])]
+        st.dataframe(pd.DataFrame(src_rows), hide_index=True, use_container_width=True)
+
+        st.divider()
+
+        # ---- funnel by sponsor status ----
+        st.subheader("✅ Sponsor vs non-sponsor conversion")
+        st.caption("If sponsor-confirmed jobs convert MUCH better than unknown-sponsor "
+                   "ones, tighten your Best Matches to sponsor-only.")
+        n_spon_applied = sum(1 for j in applied if j.get("sponsor_confirmed"))
+        n_spon_resp = sum(1 for j in applied if j.get("sponsor_confirmed")
+                          and j.get("id") in msg_by_job)
+        n_nonspon_applied = n_total - n_spon_applied
+        n_nonspon_resp = n_with_response - n_spon_resp
+        spon_df = pd.DataFrame([
+            {"cohort": "✅ H-1B sponsor-confirmed",
+             "applied": n_spon_applied, "responded": n_spon_resp,
+             "response_rate_%": (n_spon_resp * 100 // n_spon_applied) if n_spon_applied else 0},
+            {"cohort": "❓ Non-confirmed",
+             "applied": n_nonspon_applied, "responded": n_nonspon_resp,
+             "response_rate_%": (n_nonspon_resp * 100 // n_nonspon_applied) if n_nonspon_applied else 0},
+        ])
+        st.dataframe(spon_df, hide_index=True, use_container_width=True)
+
+        st.divider()
+
+        # ---- days to response distribution ----
+        if msg_by_job:
+            st.subheader("⏱️ Days from apply → first response")
+            gaps = []
+            for j in applied:
+                applied_at = _parse_dt(j.get("updated_at"))
+                resp = msg_by_job.get(j.get("id"), [])
+                if not (applied_at and resp): continue
+                # Earliest response for this job
+                earliest = min((_parse_dt(m.get("received_at")) for m in resp
+                                if _parse_dt(m.get("received_at"))), default=None)
+                if not earliest: continue
+                delta = (earliest - applied_at).days
+                if 0 <= delta <= 90:  # sanity clamp
+                    gaps.append(delta)
+            if gaps:
+                gap_df = pd.DataFrame({"days_to_response": gaps})
+                st.bar_chart(gap_df["days_to_response"].value_counts().sort_index(), height=200)
+                st.caption(f"Median: **{sorted(gaps)[len(gaps)//2]} days** · "
+                           f"Mean: **{sum(gaps)/len(gaps):.1f} days** · "
+                           f"({len(gaps)} responses tracked)")
+
+        # ---- top companies by score that got NO response (retry targets) ----
+        st.divider()
+        st.subheader("🎯 High-score applied jobs with NO response yet (retry targets)")
+        no_response = [j for j in applied if j.get("id") not in msg_by_job
+                       and (j.get("match_score") or 0) >= 50]
+        no_response.sort(key=lambda j: -(j.get("match_score") or 0))
+        if no_response:
+            rows = [{
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "sponsor": "✅" if j.get("sponsor_confirmed") else "",
+                "days_ago": (datetime.now(timezone.utc).replace(tzinfo=None) - _parse_dt(j.get("updated_at"))).days
+                            if _parse_dt(j.get("updated_at")) else 0,
+            } for j in no_response[:20]]
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        else:
+            st.info("Every high-score applied job has a tracked response. Nice.")
 
 elif page == "❄️ Frozen Companies":
     st.header("❄️ Frozen Companies")

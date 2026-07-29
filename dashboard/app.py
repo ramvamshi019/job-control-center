@@ -261,10 +261,81 @@ EXP_SECTIONS = [
 
 
 def set_status(job_id: int, status: str, reason: str = ""):
+    """Change a job's status. Also stashes the (job_id, previous_status)
+    pair in session_state so the '🔙 Undo' sidebar link + page can revert
+    the change with one click. Adds ONE extra API call per status change
+    to fetch the current status first -- cheap, worth the undo safety net."""
+    # Snapshot the previous status before mutating so undo can restore it.
+    prev = None
+    try:
+        current = api_get(f"/jobs/{job_id}")
+        if current:
+            prev = current.get("status")
+    except Exception:  # noqa: BLE001
+        prev = None
     payload = {"status": status}
     if reason:
         payload["rejection_reason"] = reason
     api_patch(f"/jobs/{job_id}", payload)
+    # Stash undo entry (keep last 20 per session; older ones drop off).
+    if prev and prev != status:
+        stack = st.session_state.setdefault("undo_stack", [])
+        stack.append({
+            "job_id": job_id,
+            "title": (current or {}).get("title", ""),
+            "company": (current or {}).get("company_name", ""),
+            "old_status": prev,
+            "new_status": status,
+            "when": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
+        })
+        # Rolling window
+        del stack[:-20]
+
+
+def handle_grid_edits(edited, status_by_id: dict) -> bool:
+    """Reconcile the checkboxes in a data_editor result against the DB.
+
+    Every discovery grid used to have its own copy of this loop -- Posted
+    Today, Best Matches, Last 24 Hours, Posted This Week, Live Feed, Entry
+    Level. One helper replaces 5 near-identical copies (~30 LOC each).
+
+    Semantics:
+      - `dismiss=True`  -> status set to Archived (drops from all discovery views)
+      - `applied=True`  when current != Applied  -> set to Applied
+      - `applied=False` when current == Applied  -> revert to New (undo apply)
+
+    Returns True on the first change so the caller can `st.rerun()` and
+    re-fetch the grid with the new state visible.
+    """
+    for jid, r in edited.iterrows():
+        cur = status_by_id.get(jid)
+        # Dismiss wins over apply -- if both are set, the user is dumping the row.
+        if "dismiss" in r and bool(r.get("dismiss")):
+            set_status(int(jid), "Archived")
+            return True
+        if "applied" in r:
+            want = bool(r.get("applied"))
+            if want and cur != "Applied":
+                set_status(int(jid), "Applied")
+                return True
+            if not want and cur == "Applied":
+                set_status(int(jid), "New")
+                return True
+    return False
+
+
+def undo_last_status_change() -> str:
+    """Pop the most recent undo entry and restore the job's old status.
+    Returns a human-readable summary of what happened, or '' if nothing
+    to undo. Called by sidebar 'Undo' button + the '🔙 Undo' page."""
+    stack = st.session_state.get("undo_stack") or []
+    if not stack:
+        return ""
+    entry = stack.pop()
+    # Revert without triggering another undo push (would create a loop).
+    api_patch(f"/jobs/{entry['job_id']}", {"status": entry["old_status"]})
+    return (f"Reverted **{entry['title']}** at **{entry['company']}** "
+            f"from {entry['new_status']} → {entry['old_status']}")
 
 
 # Sources whose apply page can't actually be opened. Himalayas is an aggregator
@@ -461,7 +532,7 @@ page = st.sidebar.radio(
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
-     "📊 Analytics", "📬 Inbox", "⚙️ Gmail Settings", "❄️ Frozen Companies",
+     "📊 Analytics", "📬 Inbox", "🔙 Undo", "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
      "Applied", "🗑️ Deleted", "Rejected", "Companies", "Stats",
      "📋 Daily Audit"],
@@ -478,6 +549,22 @@ if st.sidebar.button("📤 Export Approved → CSV"):
     res = api_post("/export/")
     if res:
         st.sidebar.success(f"Exported {res['count']} jobs to {res['path']}")
+
+# ---- Sidebar UNDO: one-click revert of the last status change ----------
+# The stack is per-session (Streamlit session_state), so it survives page
+# navigation but not tab close. Full history + bulk undo lives on 🔙 Undo.
+_undo_stack = st.session_state.get("undo_stack") or []
+if _undo_stack:
+    _last = _undo_stack[-1]
+    st.sidebar.caption(
+        f"🔙 Last: **{(_last['title'] or '')[:32]}** at **{_last['company']}** "
+        f"→ {_last['new_status']}"
+    )
+    if st.sidebar.button(f"↩️ Undo (revert to {_last['old_status']})", key="sidebar_undo"):
+        msg = undo_last_status_change()
+        if msg:
+            st.sidebar.success(msg[:100])
+            st.rerun()
 
 
 # ---------- reusable job card ----------
@@ -779,16 +866,7 @@ elif page == "🎯 Best Matches":
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
-            for jid, r in edited.iterrows():
-                cur = status_by_id.get(jid)
-                if bool(r["dismiss"]):
-                    set_status(int(jid), "Archived"); return True
-                want = bool(r["applied"])
-                if want and cur != "Applied":
-                    set_status(int(jid), "Applied"); return True
-                if not want and cur == "Applied":
-                    set_status(int(jid), "New"); return True
-            return False
+            return handle_grid_edits(edited, status_by_id)
 
         st.caption(f"👉 Tick **✅ Applied?** to mark applied · 🗑️ to dismiss · "
                    f"{len(data)} matches · {n_sponsor} sponsor-confirmed in view")
@@ -1189,16 +1267,7 @@ elif page == "📆 Last 24 Hours":
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
-            for jid, r in edited.iterrows():
-                cur = status_by_id.get(jid)
-                if bool(r["dismiss"]):
-                    set_status(int(jid), "Archived"); return True
-                want = bool(r["applied"])
-                if want and cur != "Applied":
-                    set_status(int(jid), "Applied"); return True
-                if not want and cur == "Applied":
-                    set_status(int(jid), "New"); return True
-            return False
+            return handle_grid_edits(edited, status_by_id)
 
         st.caption(f"👉 {len(data)} jobs · {n_new} strong / {n_review} borderline "
                    f"· {n_sponsor} sponsor-confirmed · tick **✅ Applied?** or **🗑️** to file")
@@ -1295,16 +1364,7 @@ elif page == "📅 Posted This Week":
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
-            for jid, r in edited.iterrows():
-                cur = status_by_id.get(jid)
-                if bool(r["dismiss"]):
-                    set_status(int(jid), "Archived"); return True
-                want = bool(r["applied"])
-                if want and cur != "Applied":
-                    set_status(int(jid), "Applied"); return True
-                if not want and cur == "Applied":
-                    set_status(int(jid), "New"); return True
-            return False
+            return handle_grid_edits(edited, status_by_id)
 
         n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
         st.caption(f"👉 {len(data)} jobs from the last 7 days · {n_sponsor} sponsor-confirmed "
@@ -1694,14 +1754,51 @@ elif page == "Applied":
             if not u: return 0
             return max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - u.replace(tzinfo=None)).days)
 
+        def _extract_hook(desc: str) -> str:
+            """Pull one company-specific hook from the job description that reads
+            like actual research: prefer a distinctive tech/product mention,
+            else the first sentence. Falls back to '' if nothing usable."""
+            if not desc: return ""
+            # Look for distinctive proper-noun tech/product mentions
+            distinctive = re.findall(
+                r"\b(Snowflake|Databricks|BigQuery|Redshift|Airflow|dbt|Kafka|"
+                r"Spark|PySpark|Kubernetes|Terraform|Iceberg|Delta Lake|Kinesis|"
+                r"Flink|dagster|Prefect|Snowpark|Materialize|Trino|Presto|"
+                r"Fivetran|Airbyte|dagster|Grafana|Prometheus|Datadog)\b",
+                desc, re.I,
+            )
+            if distinctive:
+                # De-dupe preserving order, take up to 3
+                seen, uniq = set(), []
+                for t in distinctive:
+                    if t.lower() not in seen:
+                        seen.add(t.lower()); uniq.append(t)
+                    if len(uniq) >= 3: break
+                return f"the {'/'.join(uniq)} stack you're building on"
+            # Fallback: first sentence, cleaned
+            first = re.split(r"(?<=[.!?])\s+", desc.strip(), maxsplit=1)[0]
+            first = re.sub(r"\s+", " ", first).strip()
+            if 20 <= len(first) <= 220:
+                return first.rstrip(".") + "."
+            return ""
+
         def _followup_url(row) -> str:
             """Gmail compose URL with a tailored draft. Opens in browser -> user
-            reviews + sends. If Gmail isn't the user's mail client this still works
-            since it's just an HTTPS link opening Gmail's own compose."""
+            reviews + sends. Includes a company-specific hook (mentioned tech
+            stack or first-sentence of JD) so it reads like real research."""
             domain = _guess_domain(row)
             days = _days_since(row)
             title = (row.get("title") or "the role").strip()
             company = (row.get("company_name") or "your team").strip()
+            hook = _extract_hook(row.get("description") or "")
+            # Build a "specific detail" sentence to slot into every template.
+            detail = ""
+            if hook:
+                # If hook mentions tech stack (starts with "the"), phrase as "excited about"
+                if hook.startswith("the "):
+                    detail = f" I'm particularly excited about {hook}"
+                else:
+                    detail = f" What caught my eye: {hook}"
 
             # Message tone shifts with days-since-applied.
             if days <= 3:
@@ -1709,11 +1806,11 @@ elif page == "Applied":
                 body = (
                     f"Hi {company} team,\n\n"
                     f"I recently submitted my application for the {title} role and wanted "
-                    f"to briefly introduce myself. I'm a data engineer excited about the "
-                    f"work you're doing, and I'd love the chance to discuss how my "
-                    f"background could fit the team.\n\n"
-                    f"Happy to send over any additional context or answer questions. "
-                    f"Thanks for considering my application.\n\n"
+                    f"to briefly introduce myself.{detail}\n\n"
+                    f"I'm a data engineer with hands-on experience building the kind of "
+                    f"pipelines this role calls for, and I'd love the chance to talk about "
+                    f"how my background fits the team.\n\n"
+                    f"Happy to send over additional context or answer questions.\n\n"
                     f"Best,\n{my_name}"
                 )
             elif days <= 10:
@@ -1721,20 +1818,21 @@ elif page == "Applied":
                 body = (
                     f"Hi {company} team,\n\n"
                     f"I'm following up on my application for the {title} role, submitted "
-                    f"about a week ago. I remain very interested in the opportunity and "
-                    f"would welcome any update on where things stand or the next steps.\n\n"
-                    f"Please let me know if there's anything else I can share to help "
-                    f"move things forward. Thank you for your time.\n\n"
+                    f"about a week ago.{detail}\n\n"
+                    f"I remain very interested and would welcome any update on where things "
+                    f"stand or what the next steps look like. Let me know if anything else "
+                    f"would help move it forward.\n\n"
+                    f"Thanks for your time.\n\n"
                     f"Best,\n{my_name}"
                 )
             else:
                 subj = f"Checking in one last time: {title}"
                 body = (
                     f"Hi {company} team,\n\n"
-                    f"Circling back on my application for {title} submitted {days} days "
-                    f"ago. If the role is still open I'd love to be considered; if the "
-                    f"team has moved forward with other candidates, I'd appreciate a "
-                    f"quick note so I can plan accordingly.\n\n"
+                    f"Circling back on my application for {title}, submitted {days} days "
+                    f"ago.{detail}\n\n"
+                    f"If the role is still open I'd love to be considered; if the team "
+                    f"has moved on, a quick note would help me plan accordingly.\n\n"
                     f"Either way, thanks for your consideration.\n\n"
                     f"Best,\n{my_name}"
                 )
@@ -2106,6 +2204,36 @@ elif page == "📬 Inbox":
             "preview": (m.get("snippet") or "")[:140],
         } for m in sorted(filtered, key=lambda x: x.get("received_at") or "", reverse=True)]
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+elif page == "🔙 Undo":
+    st.header("🔙 Undo — recent status changes this session")
+    st.caption("Every time you tick ✅ Applied / 🗑️ Delete / any status button, JCC "
+               "snapshots the previous status. Click Undo to revert. Session-scoped — "
+               "when you close the tab, this history clears.")
+    stack = list(reversed(st.session_state.get("undo_stack") or []))
+    if not stack:
+        st.info("No status changes yet this session — click ✅ Applied or 🗑️ Delete "
+                "on any job and it'll show up here for one-click undo.")
+    else:
+        st.metric("Actions in this session", len(stack))
+        for i, entry in enumerate(stack):
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([3, 2, 1])
+                c1.markdown(f"**{(entry['title'] or '(untitled)')[:70]}**  \n"
+                            f"_{entry['company']}_ · at {entry['when'][11:16]} UTC")
+                c2.markdown(f"→ **{entry['new_status']}**  \n"
+                            f"was: {entry['old_status']}")
+                if c3.button("↩️ Undo", key=f"undo_page_{i}"):
+                    # This entry might not be the top of stack -- find + pop it
+                    real_stack = st.session_state.get("undo_stack") or []
+                    if entry in real_stack:
+                        real_stack.remove(entry)
+                    api_patch(f"/jobs/{entry['job_id']}", {"status": entry["old_status"]})
+                    st.success(f"Reverted → {entry['old_status']}")
+                    st.rerun()
+        if st.button("🗑️ Clear session history"):
+            st.session_state["undo_stack"] = []
+            st.rerun()
 
 elif page == "📊 Analytics":
     st.header("📊 Application Analytics")

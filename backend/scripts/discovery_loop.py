@@ -44,6 +44,7 @@ JOB_STORIES_EVERY   = int(os.environ.get("DISC_JOBSTORIES_EVERY_S",  60 * 10))  
 HN_HIRING_EVERY     = int(os.environ.get("DISC_HN_HIRING_EVERY_S",   60 * 60 * 6))   # 6 hrs
 YC_EVERY            = int(os.environ.get("DISC_YC_EVERY_S",          60 * 60 * 24))  # 24 hrs
 HARVEST_EVERY       = int(os.environ.get("DISC_HARVEST_EVERY_S",     60 * 60 * 24 * 7))  # 7 days
+GMAIL_EVERY         = int(os.environ.get("DISC_GMAIL_EVERY_S",       60 * 15))       # 15 min
 
 # Sleep between the *loop's outer tick*. Short enough that per-source cadences
 # are honored to within ~1 min. Doesn't drive API load -- source functions
@@ -65,8 +66,8 @@ def _safe_run(name: str, fn):
 
 def main() -> int:
     log.info(
-        "discovery loop starting. cadences: job_stories=%ds hn_hiring=%ds yc=%ds harvest=%ds",
-        JOB_STORIES_EVERY, HN_HIRING_EVERY, YC_EVERY, HARVEST_EVERY,
+        "discovery loop starting. cadences: job_stories=%ds hn_hiring=%ds yc=%ds harvest=%ds gmail=%ds",
+        JOB_STORIES_EVERY, HN_HIRING_EVERY, YC_EVERY, HARVEST_EVERY, GMAIL_EVERY,
     )
 
     # Per-source "next-run" timestamps. Start EVERY source at now so the first
@@ -78,6 +79,7 @@ def main() -> int:
         "hn_hiring":   now,
         "yc":          now,
         "harvest":     now,
+        "gmail":       now,
     }
 
     def _due(key: str) -> bool:
@@ -104,6 +106,11 @@ def main() -> int:
             _safe_run("Weekly harvest", _harvest_and_discover)
             next_run["harvest"] = time.time() + HARVEST_EVERY
 
+        # 5. Gmail watcher (IMAP poll for recruiter responses on applied jobs)
+        if _due("gmail"):
+            _safe_run("Gmail watcher", _gmail_watch)
+            next_run["gmail"] = time.time() + GMAIL_EVERY
+
         time.sleep(TICK_S)
 
 
@@ -124,6 +131,13 @@ def _hn_who_is_hiring():
 def _yc_directory():
     from seed_yc_directory import run
     return run(workers=6)
+
+
+def _gmail_watch():
+    """Poll Gmail for recruiter responses on applied jobs. No-op if the user
+    hasn't set up Gmail credentials yet (returns {'configured': False})."""
+    from gmail_watcher import run
+    return run()
 
 
 def _harvest_and_discover():

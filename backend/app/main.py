@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routes import applications, audit, companies, export, jobs, resume
+from app.routes import applications, audit, companies, export, gmail, jobs, resume
 from app.utils.logging import get_logger
 
 log = get_logger("main")
@@ -59,3 +59,4 @@ app.include_router(applications.router)
 app.include_router(export.router)
 app.include_router(resume.router)
 app.include_router(audit.router)
+app.include_router(gmail.router)

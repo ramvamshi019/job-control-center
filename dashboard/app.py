@@ -205,18 +205,27 @@ def posted_freshness(job: dict) -> str | None:
       "confirmed" - the source stated a real posting date and it's today.
       "likely"    - the source hides the date (NULL or a crawl-time fallback
                     stamp), but the posting FIRST appeared today on a board we
-                    were already crawling. A new posting on an established board
-                    is almost certainly newly-posted, so we surface it -- clearly
-                    marked as inferred, never conflated with a confirmed date.
-      None        - neither; don't show on Posted Today.
+                    were already crawling (`board_known`). A new posting on an
+                    established board is almost certainly newly-posted; we
+                    surface it clearly marked as inferred.
+      "new_board" - discovered today, but the company itself was added in the
+                    last ~2 days so we don't yet have `board_known`. Could be a
+                    genuinely-new posting OR a first-crawl backfill from that
+                    just-added board -- we can't tell. Surfaced so tonight's
+                    HN/YC seeds' fresh jobs don't stay hidden for two days;
+                    tagged distinctly (🟢 NEW BOARD) so you know why.
+      None        - none of the above; don't show on Posted Today.
 
     Half of all sources (iCIMS, SmartRecruiters, Workday, BambooHR) never expose
-    a usable posting date; without "likely" they'd be invisible here even when
-    genuinely brand-new."""
+    a usable posting date; without "likely"/"new_board" they'd be invisible
+    here even when genuinely brand-new."""
     if posted_today(job):
         return "confirmed"
     if not job.get("board_known"):
-        return None  # can't trust "new = fresh" on a board we just started on
+        # Recently-added company: earlier this returned None, hiding every job
+        # from any board seeded in the last 2 days. Now we surface with a
+        # different tag so you can eyeball them separately.
+        return "new_board" if _discovered_today(job) else None
     posted = _parse_dt(job.get("posted_at"))
     disc = _parse_dt(job.get("discovered_at"))
     date_is_usable = posted is not None and (
@@ -415,7 +424,9 @@ page = st.sidebar.radio(
     "Pages",
     ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🎓 Entry Level",
      "🔥 Fresh (apply now)",
-     "🕵️ JobRight Gap", "🔴 Posted Today", "🟢 Live Feed", "Today's Best Jobs",
+     "🕵️ JobRight Gap", "🔴 Posted Today", "📆 Last 24 Hours",
+     "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
+     "📬 Inbox", "⚙️ Gmail Settings",
      "Need Review", "Approved",
      "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats",
      "📋 Daily Audit"],
@@ -887,7 +898,10 @@ elif page == "🔴 Posted Today":
                "🔴 **CONFIRMED** = the source stated a posting date of today. "
                "🟡 **LIKELY** = the source hides the date, but this posting first appeared "
                "today on a board we already crawl — almost always newly-posted. "
-               "Citizenship/clearance roles are excluded automatically. Auto-refreshes every 20s.")
+               "🟢 **NEW BOARD** = discovered today from a company we just added (past 2 days) "
+               "— could be a genuinely-fresh post or a first-crawl backfill; eyeball to tell. "
+               "Citizenship/clearance/foreign roles excluded automatically. Window: last 48h. "
+               "Auto-refreshes every 20s.")
 
     STATUS_BADGE = {
         "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
@@ -917,7 +931,7 @@ elif page == "🔴 Posted Today":
         # limit=3000 (API cap): on a busy day >1000 jobs land in 30h, so the old
         # 1000 truncated the oldest-in-window rows BEFORE the freshness filter ran
         # -- i.e. genuinely-today jobs were silently dropped off this page.
-        raw = filter_feed(api_get("/jobs/", order_by="discovered", discovered_within_hours=30,
+        raw = filter_feed(api_get("/jobs/", order_by="discovered", discovered_within_hours=48,
                                   exclude_rejected=True, limit=3000, slim=True))
         data = []
         for j in raw:
@@ -931,14 +945,18 @@ elif page == "🔴 Posted Today":
             data = [j for j in data if j.get("status") != "Applied"]
         # Jobs you dismissed (🗑️ -> Archived) never belong on Posted Today.
         data = [j for j in data if j.get("status") != "Archived"]
-        # Confirmed first, then strongest match; keeps the trustworthy rows on top.
-        data.sort(key=lambda j: (j["_freshness"] != "confirmed",
+        # Sort: CONFIRMED → LIKELY → NEW BOARD, then by match score within each.
+        # Keeps trustworthy rows on top, tentative rows at the bottom.
+        _fresh_rank = {"confirmed": 0, "likely": 1, "new_board": 2}
+        data.sort(key=lambda j: (_fresh_rank.get(j["_freshness"], 9),
                                  -(j.get("match_score") or 0)))
 
         n_conf = sum(1 for j in data if j["_freshness"] == "confirmed")
-        n_likely = len(data) - n_conf
+        n_likely = sum(1 for j in data if j["_freshness"] == "likely")
+        n_new_board = sum(1 for j in data if j["_freshness"] == "new_board")
         m1, m2, m3 = st.columns(3)
-        m1.metric("🔴 Fresh today", len(data), help=f"{n_conf} confirmed · {n_likely} likely")
+        m1.metric("🔴 Fresh today", len(data),
+                  help=f"{n_conf} confirmed · {n_likely} likely · {n_new_board} new board")
         m2.metric("✅ H-1B sponsors", sum(1 for j in data if j.get("sponsor_confirmed")))
         m3.metric("🆕 New (strong match)", sum(1 for j in data if j.get("status") == "New"))
         if not data:
@@ -946,7 +964,8 @@ elif page == "🔴 Posted Today":
                     "new postings will pop in as the crawler finds them.")
             return
 
-        FRESH_BADGE = {"confirmed": "🔴 CONFIRMED", "likely": "🟡 LIKELY"}
+        FRESH_BADGE = {"confirmed": "🔴 CONFIRMED", "likely": "🟡 LIKELY",
+                       "new_board": "🟢 NEW BOARD"}
 
         # One table renderer, reused per experience band (or once for the flat
         # list). Returns True on the first tick change so the caller can rerun.
@@ -989,7 +1008,10 @@ elif page == "🔴 Posted Today":
                     "fresh": st.column_config.TextColumn(
                         "fresh", help="🔴 CONFIRMED = source stated today's date · "
                                       "🟡 LIKELY = source hides the date but it first appeared "
-                                      "today on a board we already crawl."),
+                                      "today on a board we already crawl · "
+                                      "🟢 NEW BOARD = discovered today from a company we "
+                                      "just added (past 2 days). Could be a new posting OR "
+                                      "a first-crawl backfill from that board -- eyeball to tell."),
                     "posted": st.column_config.TextColumn(
                         "posted", help="Real posting date (confirmed rows) or ~first-seen date "
                                        "(likely rows)."),
@@ -1011,9 +1033,10 @@ elif page == "🔴 Posted Today":
             return False
 
         n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
-        st.caption(f"👉 Tick **✅ Applied?** to mark a job applied · 🔴 CONFIRMED date vs "
-                   f"🟡 LIKELY (first seen today) · {n_conf} confirmed / {n_likely} likely · "
-                   f"{n_sponsor} sponsor-confirmed in view")
+        st.caption(f"👉 Tick **✅ Applied?** to mark a job applied · 🔴 CONFIRMED date · "
+                   f"🟡 LIKELY (first seen today, established board) · 🟢 NEW BOARD "
+                   f"(company added in last 2 days) · {n_conf} confirmed / {n_likely} likely "
+                   f"/ {n_new_board} new-board · {n_sponsor} sponsor-confirmed in view")
 
         if group_by_exp:
             # Bucket by stated experience. years_required() reads title+description,
@@ -1036,6 +1059,225 @@ elif page == "🔴 Posted Today":
             st.rerun()
 
     posted_today_feed()
+
+elif page == "📆 Last 24 Hours":
+    st.header("📆 Last 24 Hours")
+    st.caption("**Every tech-relevant job the crawler pulled in the last 24 hours** — "
+               "broader than 🔴 Posted Today because it drops the 'posted today' proof "
+               "requirement. Includes Need-Review borderline matches, so you see all "
+               "~800/day tech jobs (vs Posted Today's ~60 confirmed-fresh subset). "
+               "Same tick-to-apply / tick-to-dismiss workflow.")
+
+    STATUS_BADGE_24 = {
+        "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
+        "Need Review": "🔍 Review", "New": "🆕 New",
+    }
+    c1, c2, c3, c4 = st.columns(4)
+    h_hide_applied  = c1.checkbox("Hide applied", value=True, key="h_hide_applied")
+    h_only_sponsors = c2.checkbox("Only ✅ sponsors", value=False, key="h_only_sponsors")
+    h_only_new      = c3.checkbox("Only 🆕 New (strong match)", value=False, key="h_only_new",
+                                  help="Hide the borderline Need-Review rows; show only "
+                                       "the strong-match subset already surfacing on Posted Today.")
+    h_group         = c4.checkbox("Group by experience", value=True, key="h_group")
+
+    def last_24h_feed():
+        raw = filter_feed(api_get("/jobs/", order_by="discovered", discovered_within_hours=24,
+                                  exclude_rejected=True, limit=3000, slim=True))
+        data = [j for j in raw if j.get("status") not in ("Archived",)]
+        if h_hide_applied:
+            data = [j for j in data if j.get("status") != "Applied"]
+        if h_only_sponsors:
+            data = [j for j in data if j.get("sponsor_confirmed")]
+        if h_only_new:
+            data = [j for j in data if j.get("status") == "New"]
+        # Best match first, sponsor wins ties.
+        data.sort(key=lambda j: ((j.get("match_score") or 0),
+                                 bool(j.get("sponsor_confirmed"))), reverse=True)
+
+        n_new       = sum(1 for j in data if j.get("status") == "New")
+        n_review    = sum(1 for j in data if j.get("status") == "Need Review")
+        n_sponsor   = sum(1 for j in data if j.get("sponsor_confirmed"))
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("📆 Total in 24h", len(data))
+        m2.metric("🆕 Strong (New)", n_new)
+        m3.metric("🔍 Need Review", n_review)
+        m4.metric("✅ H-1B sponsors", n_sponsor)
+        if not data:
+            st.info("Nothing surviving filters in the last 24h. Check the crawler is running.")
+            return
+
+        def render_24h_section(subset, key_prefix):
+            rows = [{
+                "id": j.get("id"),
+                "applied": j.get("status") == "Applied",
+                "dismiss": False,
+                "status": STATUS_BADGE_24.get(j.get("status"), j.get("status") or ""),
+                "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+                "posted": (j.get("posted_at") or "")[:10] or ("~" + (j.get("discovered_at") or "")[:10]),
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "location": j.get("location"),
+                "risk": j.get("sponsorship_risk"),
+                "open": apply_url(j),
+            } for j in subset]
+            df = pd.DataFrame(rows).set_index("id")
+            grid_h = min(len(rows) + 1, 26) * 35 + 3
+            editor_key = f"h24_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
+            edited = st.data_editor(
+                df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
+                disabled=["status", "sponsor", "posted", "score", "title", "company",
+                          "location", "risk", "open"],
+                column_order=["dismiss", "status", "sponsor", "posted", "score", "title",
+                              "company", "location", "risk", "open", "applied"],
+                column_config={
+                    "applied": st.column_config.CheckboxColumn(
+                        "✅ Applied?", help="Tick when you've applied — kept, never pruned."),
+                    "dismiss": st.column_config.CheckboxColumn(
+                        "🗑️", help="Tick to dismiss — files to 🗑️ Archived."),
+                    "posted": st.column_config.TextColumn(
+                        "posted", help="Real posting date (or ~first-seen if source hides date)."),
+                    "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "score": st.column_config.NumberColumn("score", format="%d"),
+                },
+            )
+            status_by_id = {j.get("id"): j.get("status") for j in subset}
+            for jid, r in edited.iterrows():
+                cur = status_by_id.get(jid)
+                if bool(r["dismiss"]):
+                    set_status(int(jid), "Archived"); return True
+                want = bool(r["applied"])
+                if want and cur != "Applied":
+                    set_status(int(jid), "Applied"); return True
+                if not want and cur == "Applied":
+                    set_status(int(jid), "New"); return True
+            return False
+
+        st.caption(f"👉 {len(data)} jobs · {n_new} strong / {n_review} borderline "
+                   f"· {n_sponsor} sponsor-confirmed · tick **✅ Applied?** or **🗑️** to file")
+
+        if h_group:
+            yrs_by_id = {j.get("id"): years_required(j) for j in data}
+            for idx, (label, belongs) in enumerate(EXP_SECTIONS):
+                subset = [j for j in data if belongs(yrs_by_id.get(j.get("id")))]
+                if not subset:
+                    continue
+                n_sp = sum(1 for j in subset if j.get("sponsor_confirmed"))
+                st.subheader(f"{label}  ·  {len(subset)} jobs"
+                             + (f"  ·  {n_sp} ✅ H-1B" if n_sp else ""))
+                if render_24h_section(subset, idx):
+                    st.rerun()
+        elif render_24h_section(data, "all"):
+            st.rerun()
+
+    last_24h_feed()
+
+elif page == "📅 Posted This Week":
+    st.header("📅 Posted This Week")
+    st.caption("Every fresh job the crawler pulled in the **last 7 days**, ranked by match "
+               "score. Broader than 🔴 Posted Today (48h with freshness proof) — catches jobs "
+               "posted over the weekend or that Posted Today's freshness filter passed on. "
+               "Same tick-to-apply + tick-to-dismiss workflow.")
+
+    STATUS_BADGE_W = {
+        "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
+        "Need Review": "🔍 Review", "New": "🆕 New",
+    }
+    c1, c2, c3 = st.columns(3)
+    w_hide_applied = c1.checkbox("Hide jobs I've already applied to", value=True, key="w_hide_applied")
+    w_only_sponsors = c2.checkbox("Only ✅ H-1B sponsor-confirmed", value=False, key="w_only_sponsors")
+    w_group = c3.checkbox("Group by experience", value=True, key="w_group",
+                          help="Split into experience bands parsed from each posting.")
+
+    def posted_this_week_feed():
+        # 168h = 7 days. No freshness filter (unlike Posted Today) -- we want
+        # everything the crawler discovered this week, not just "today".
+        raw = filter_feed(api_get("/jobs/", order_by="discovered", discovered_within_hours=168,
+                                  exclude_rejected=True, limit=3000, slim=True))
+        data = [j for j in raw if j.get("status") not in ("Archived",)]
+        if w_hide_applied:
+            data = [j for j in data if j.get("status") != "Applied"]
+        if w_only_sponsors:
+            data = [j for j in data if j.get("sponsor_confirmed")]
+        # Best match first (score desc), sponsor wins ties.
+        data.sort(key=lambda j: ((j.get("match_score") or 0),
+                                 bool(j.get("sponsor_confirmed"))), reverse=True)
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("📅 Jobs this week", len(data))
+        m2.metric("✅ H-1B sponsors", sum(1 for j in data if j.get("sponsor_confirmed")))
+        m3.metric("🆕 New (strong match)", sum(1 for j in data if j.get("status") == "New"))
+        if not data:
+            st.info("No jobs discovered in the last 7 days matched the filters. Loosen the "
+                    "sliders above or check the crawler is running.")
+            return
+
+        def render_wk_section(subset, key_prefix):
+            rows = [{
+                "id": j.get("id"),
+                "applied": j.get("status") == "Applied",
+                "dismiss": False,
+                "status": STATUS_BADGE_W.get(j.get("status"), j.get("status") or ""),
+                "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
+                "posted": (j.get("posted_at") or "")[:10] or ("~" + (j.get("discovered_at") or "")[:10]),
+                "score": j.get("match_score"),
+                "title": j.get("title"),
+                "company": j.get("company_name"),
+                "location": j.get("location"),
+                "risk": j.get("sponsorship_risk"),
+                "open": apply_url(j),
+            } for j in subset]
+            df = pd.DataFrame(rows).set_index("id")
+            grid_h = min(len(rows) + 1, 26) * 35 + 3
+            editor_key = f"wk_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
+            edited = st.data_editor(
+                df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
+                disabled=["status", "sponsor", "posted", "score", "title", "company",
+                          "location", "risk", "open"],
+                column_order=["dismiss", "status", "sponsor", "posted", "score", "title",
+                              "company", "location", "risk", "open", "applied"],
+                column_config={
+                    "applied": st.column_config.CheckboxColumn(
+                        "✅ Applied?", help="Tick when you've applied — kept, never pruned."),
+                    "dismiss": st.column_config.CheckboxColumn(
+                        "🗑️", help="Tick to dismiss — files to 🗑️ Archived and drops it from this list."),
+                    "posted": st.column_config.TextColumn(
+                        "posted", help="Real posting date (or ~first-seen if source hides date)."),
+                    "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "score": st.column_config.NumberColumn("score", format="%d"),
+                },
+            )
+            status_by_id = {j.get("id"): j.get("status") for j in subset}
+            for jid, r in edited.iterrows():
+                cur = status_by_id.get(jid)
+                if bool(r["dismiss"]):
+                    set_status(int(jid), "Archived"); return True
+                want = bool(r["applied"])
+                if want and cur != "Applied":
+                    set_status(int(jid), "Applied"); return True
+                if not want and cur == "Applied":
+                    set_status(int(jid), "New"); return True
+            return False
+
+        n_sponsor = sum(1 for j in data if j.get("sponsor_confirmed"))
+        st.caption(f"👉 {len(data)} jobs from the last 7 days · {n_sponsor} sponsor-confirmed "
+                   f"· tick **✅ Applied?** or **🗑️** to file")
+
+        if w_group:
+            yrs_by_id = {j.get("id"): years_required(j) for j in data}
+            for idx, (label, belongs) in enumerate(EXP_SECTIONS):
+                subset = [j for j in data if belongs(yrs_by_id.get(j.get("id")))]
+                if not subset:
+                    continue
+                n_sp = sum(1 for j in subset if j.get("sponsor_confirmed"))
+                st.subheader(f"{label}  ·  {len(subset)} jobs"
+                             + (f"  ·  {n_sp} ✅ H-1B" if n_sp else ""))
+                if render_wk_section(subset, idx):
+                    st.rerun()
+        elif render_wk_section(data, "all"):
+            st.rerun()
+
+    posted_this_week_feed()
 
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")
@@ -1364,18 +1606,125 @@ elif page == "Approved":
 
 elif page == "Applied":
     st.header("Applied")
-    st.caption("Jobs you've applied to. These are never auto-pruned, so the record stays.")
+    st.caption("Jobs you've applied to — auto-suggested **follow-up emails** below. Studies "
+               "put follow-up response rates 30-50% higher than cold applications; the tool "
+               "guesses `careers@company.com`, drafts a tailored message, and opens Gmail "
+               "compose in a new tab. Review + hit Send.")
+
     df = jobs_df(status="Applied")
     if df.empty:
         st.info("Nothing applied yet.")
     else:
+        from urllib.parse import quote, urlparse
+        prof = my_profile()
+        my_name = (prof.get("full_name") or prof.get("name") or "").strip() or "there"
+
+        def _guess_domain(row) -> str:
+            """Best-guess employer domain for a careers@ / hiring@ email."""
+            # 1) If the job_url points to the company's own site (not the ATS), use it.
+            job_url = (row.get("job_url") or "").strip()
+            if job_url:
+                host = urlparse(job_url).netloc.lower()
+                if host and not any(ats in host for ats in
+                        ("greenhouse.io", "lever.co", "ashbyhq.com", "myworkdayjobs.com",
+                         "icims.com", "bamboohr.com", "smartrecruiters.com", "workable.com",
+                         "rippling.com", "recruitee.com", "himalayas.app", "jobvite.com",
+                         "gem.com", "workday.com", "eightfold.ai", "themuse.com")):
+                    return host.replace("www.", "")
+            # 2) Fallback: squash company name -> .com. Same trick USCIS URL-guesser uses.
+            name = (row.get("company_name") or "").lower()
+            name = re.sub(r"\b(inc|corp|corporation|llc|ltd|limited|company|co|group)\b", " ", name)
+            name = re.sub(r"[^a-z0-9]+", "", name)
+            return f"{name}.com" if 3 <= len(name) <= 30 else ""
+
+        def _days_since(row) -> int:
+            """Rough days-since-applied via updated_at (proxy; DB has no explicit
+            applied_at column and updated_at only bumps on status change once we
+            mark Applied, so it's a solid approximation)."""
+            u = _parse_dt(row.get("updated_at"))
+            if not u: return 0
+            return max(0, (datetime.utcnow() - u.replace(tzinfo=None)).days)
+
+        def _followup_url(row) -> str:
+            """Gmail compose URL with a tailored draft. Opens in browser -> user
+            reviews + sends. If Gmail isn't the user's mail client this still works
+            since it's just an HTTPS link opening Gmail's own compose."""
+            domain = _guess_domain(row)
+            days = _days_since(row)
+            title = (row.get("title") or "the role").strip()
+            company = (row.get("company_name") or "your team").strip()
+
+            # Message tone shifts with days-since-applied.
+            if days <= 3:
+                subj = f"Introduction: {my_name} for {title}"
+                body = (
+                    f"Hi {company} team,\n\n"
+                    f"I recently submitted my application for the {title} role and wanted "
+                    f"to briefly introduce myself. I'm a data engineer excited about the "
+                    f"work you're doing, and I'd love the chance to discuss how my "
+                    f"background could fit the team.\n\n"
+                    f"Happy to send over any additional context or answer questions. "
+                    f"Thanks for considering my application.\n\n"
+                    f"Best,\n{my_name}"
+                )
+            elif days <= 10:
+                subj = f"Following up: {title} application"
+                body = (
+                    f"Hi {company} team,\n\n"
+                    f"I'm following up on my application for the {title} role, submitted "
+                    f"about a week ago. I remain very interested in the opportunity and "
+                    f"would welcome any update on where things stand or the next steps.\n\n"
+                    f"Please let me know if there's anything else I can share to help "
+                    f"move things forward. Thank you for your time.\n\n"
+                    f"Best,\n{my_name}"
+                )
+            else:
+                subj = f"Checking in one last time: {title}"
+                body = (
+                    f"Hi {company} team,\n\n"
+                    f"Circling back on my application for {title} submitted {days} days "
+                    f"ago. If the role is still open I'd love to be considered; if the "
+                    f"team has moved forward with other candidates, I'd appreciate a "
+                    f"quick note so I can plan accordingly.\n\n"
+                    f"Either way, thanks for your consideration.\n\n"
+                    f"Best,\n{my_name}"
+                )
+            to = f"careers@{domain}" if domain else ""
+            return (
+                "https://mail.google.com/mail/?view=cm&fs=1"
+                f"&to={quote(to)}&su={quote(subj)}&body={quote(body)}"
+            )
+
         df = df.copy()
+        df["days_ago"] = df.apply(lambda r: _days_since(r), axis=1)
         df["apply"] = df.apply(lambda r: apply_url(r.to_dict()), axis=1)
-        show = ["title", "company_name", "location", "match_score", "sponsorship_risk", "apply"]
-        st.dataframe(df[[c for c in show if c in df.columns]], use_container_width=True,
-                     hide_index=True, column_config={"apply": st.column_config.LinkColumn("apply", display_text="open ↗")})
-        for _, row in df.iterrows():
-            render_job_card(row.to_dict(), actions=("Follow-up", "Archive"))
+        df["follow_up"] = df.apply(lambda r: _followup_url(r.to_dict()), axis=1)
+        df["email_guess"] = df.apply(lambda r: f"careers@{_guess_domain(r.to_dict())}" if _guess_domain(r.to_dict()) else "(couldn't guess)", axis=1)
+
+        due = int((df["days_ago"] >= 4).sum())
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total applied", len(df))
+        m2.metric("Due for follow-up", due, help="Applied 4+ days ago with no explicit response yet.")
+        m3.metric("Avg days since apply", f"{df['days_ago'].mean():.1f}")
+
+        show = ["days_ago", "title", "company_name", "location", "match_score",
+                "sponsorship_risk", "email_guess", "follow_up", "apply"]
+        st.dataframe(
+            df[[c for c in show if c in df.columns]].sort_values("days_ago", ascending=False),
+            use_container_width=True, hide_index=True,
+            column_config={
+                "days_ago":       st.column_config.NumberColumn("days ago", format="%d"),
+                "match_score":    st.column_config.NumberColumn("score", format="%d"),
+                "email_guess":    st.column_config.TextColumn("suggested to", help="Best-guess address — verify before sending."),
+                "follow_up":      st.column_config.LinkColumn("📧 draft follow-up", display_text="draft ↗",
+                                    help="Opens Gmail compose in a new tab with a tailored message pre-filled. Tone shifts with days-since-applied (day 1-3 intro / day 4-10 follow-up / day 11+ last check-in)."),
+                "apply":          st.column_config.LinkColumn("apply page", display_text="open ↗"),
+            }
+        )
+        st.caption("📧 Click a **draft ↗** — Gmail opens with the message pre-written. "
+                   "Verify the recipient (`careers@...` is a best guess; a real recruiter email "
+                   "from your confirmation email works better if you have it), tweak the body if "
+                   "you want, and send. Draft tone auto-adjusts by days-since-applied.")
 
 elif page == "Rejected":
     st.header("Rejected")
@@ -1603,3 +1952,105 @@ elif page == "📋 Daily Audit":
                     pd.DataFrame(top.items(), columns=["ATS", "companies"]),
                     hide_index=True, use_container_width=True,
                 )
+
+elif page == "⚙️ Gmail Settings":
+    st.header("⚙️ Gmail Settings")
+    st.caption("Give JCC read+send access to your Gmail so it can (a) detect recruiter "
+               "responses to Applied jobs, and (b) send follow-up emails as you. Uses a "
+               "**Gmail App Password** (not your regular Google password). Stored in a "
+               "gitignored file inside the persistent DB volume on your droplet — same "
+               "trust boundary as the DB. Never leaves the droplet.")
+
+    settings = api_get("/gmail/settings") or {}
+    if settings.get("configured"):
+        st.success(f"✅ Configured for **{settings.get('email')}**. Last poll: "
+                   f"**{settings.get('last_poll') or 'not yet'}**  ·  "
+                   f"Matched messages ever: **{settings.get('total_matched', 0)}**")
+    else:
+        st.warning("Not configured yet. Follow the 2-step setup below.")
+
+    st.subheader("① Create a Gmail App Password (one time, 2 min)")
+    st.markdown(
+        "1. Make sure **2-Step Verification is ON** on your Google account "
+        "([enable here](https://myaccount.google.com/signinoptions/two-step-verification)).\n"
+        "2. Go to [**App Passwords**](https://myaccount.google.com/apppasswords).\n"
+        "3. Type a name like `Job Control Center` → **Create**.\n"
+        "4. Copy the 16-character password (spaces don't matter).\n"
+        "5. Paste it below."
+    )
+
+    st.subheader("② Paste it here")
+    with st.form("gmail_setup"):
+        gm_email = st.text_input("Your Gmail address",
+                                 value=settings.get("email", ""),
+                                 placeholder="you@gmail.com")
+        gm_pw    = st.text_input("App password (16 chars, spaces OK)",
+                                 type="password", placeholder="xxxx xxxx xxxx xxxx")
+        submitted = st.form_submit_button("💾 Save & test connection")
+    if submitted:
+        if not gm_email or not gm_pw:
+            st.error("Fill both fields.")
+        else:
+            resp = api_post("/gmail/settings",
+                            {"email": gm_email.strip(), "app_password": gm_pw.replace(" ", "")})
+            if resp and resp.get("ok"):
+                st.success(f"✅ Saved. IMAP login test: **{resp.get('login_test')}**. "
+                           f"First poll fires within 15 min.")
+            else:
+                err = (resp or {}).get("error") or "unknown error"
+                st.error(f"❌ Save/test failed: {err}")
+
+    if settings.get("configured"):
+        st.divider()
+        st.subheader("③ Manual poll")
+        if st.button("🔄 Run gmail poll now"):
+            with st.spinner("Polling Gmail…"):
+                r = api_post("/gmail/poll", {}) or {}
+            if r.get("matched") is not None:
+                st.success(f"Matched **{r['matched']}** new messages "
+                           f"(interviews: {r.get('interview',0)}, rejections: {r.get('rejection',0)})")
+            else:
+                st.error(f"Poll failed: {r.get('error') or r}")
+        st.divider()
+        st.subheader("④ Danger zone")
+        if st.button("🗑️ Remove Gmail settings"):
+            api_post("/gmail/settings/clear", {})
+            st.rerun()
+
+elif page == "📬 Inbox":
+    st.header("📬 Inbox — recruiter responses")
+    st.caption("Messages the Gmail watcher matched to your Applied jobs. Auto-classified "
+               "as interview / rejection / ack / other. Configure Gmail first at "
+               "**⚙️ Gmail Settings** if this page is empty.")
+
+    msgs = api_get("/gmail/messages") or []
+    if not msgs:
+        st.info("No matched messages yet. Either Gmail isn't set up, or no recruiters "
+                "have replied yet. First poll runs within 15 min of setup.")
+    else:
+        c1, c2, c3, c4 = st.columns(4)
+        n_int = sum(1 for m in msgs if m.get("classification") == "interview")
+        n_rej = sum(1 for m in msgs if m.get("classification") == "rejection")
+        n_ack = sum(1 for m in msgs if m.get("classification") == "ack")
+        c1.metric("📬 Total", len(msgs))
+        c2.metric("🎯 Interviews", n_int)
+        c3.metric("❌ Rejections", n_rej)
+        c4.metric("📥 Acks", n_ack)
+
+        klass_filter = st.multiselect(
+            "Show", ["interview", "rejection", "ack", "other"],
+            default=["interview", "rejection", "ack", "other"],
+        )
+        filtered = [m for m in msgs if m.get("classification") in klass_filter]
+        badge = {"interview": "🎯 INTERVIEW", "rejection": "❌ REJECTION",
+                 "ack": "📥 ACK", "other": "◼️ OTHER"}
+        rows = [{
+            "when":    (m.get("received_at") or "")[:16].replace("T", " "),
+            "type":    badge.get(m.get("classification"), m.get("classification") or ""),
+            "from":    m.get("from_addr") or "",
+            "job":     m.get("job_title") or "",
+            "company": m.get("company_name") or "",
+            "subject": m.get("subject") or "",
+            "preview": (m.get("snippet") or "")[:140],
+        } for m in sorted(filtered, key=lambda x: x.get("received_at") or "", reverse=True)]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)

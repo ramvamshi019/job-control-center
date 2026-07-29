@@ -105,8 +105,13 @@ def api_post(path: str, payload: dict | None = None, **params):
         return None
 
 
-def jobs_df(status=None, min_score=0, sponsorship_risk=None):
+def jobs_df(status=None, min_score=0, sponsorship_risk=None, feed_only=False):
+    """DataFrame of jobs. `feed_only=True` drops walled + non-US rows for
+    discovery views; leave False on history views (Applied/Approved/Rejected)
+    so already-actioned records are never hidden retroactively."""
     data = api_get("/jobs/", status=status, min_score=min_score, sponsorship_risk=sponsorship_risk) or []
+    if feed_only:
+        data = filter_feed(data)
     return pd.DataFrame(data)
 
 
@@ -275,6 +280,78 @@ def apply_url(job: dict) -> str:
         q = quote_plus(f"{job.get('company_name', '')} {job.get('title', '')} careers")
         return "https://www.google.com/search?q=" + q
     return u
+
+
+# --- Feed hygiene: hide rows the user can't act on ---------------------------
+# The discovery pages (Posted Today, Live Feed, Best Matches, Fresh, Fast Apply,
+# Entry Level, Find Jobs, JobRight Gap) all share the same two failure modes:
+#
+#   1. Himalayas rows: the "open" link either dead-ends on Cloudflare or bounces
+#      you to a Google search — you can't actually apply from here.
+#   2. Non-US postings: SmartRecruiters/Workday/Greenhouse/etc. don't filter by
+#      country, so any multinational employer (Boschgroup, etc.) leaks European /
+#      Indian / Canadian roles into a feed built for a US-based F-1 job search.
+#
+# Both get dropped at the DASHBOARD (not the API) so history pages
+# (Applied/Approved/Rejected/Archived) keep the full record — this only strips
+# the ACTIVE discovery views.
+
+# Non-US country names, matched as whole words case-insensitively. Kept narrow
+# to countries that actually show up in our sources; adding more here is safe.
+_NON_US_COUNTRIES = (
+    "germany", "deutschland", "united kingdom", "england", "scotland", "wales",
+    "ireland", "france", "spain", "italy", "portugal", "netherlands", "belgium",
+    "luxembourg", "switzerland", "austria", "sweden", "norway", "finland",
+    "denmark", "poland", "czechia", "czech republic", "slovakia", "hungary",
+    "romania", "bulgaria", "greece", "turkey", "russia", "ukraine",
+    "china", "japan", "south korea", "india", "pakistan", "bangladesh",
+    "vietnam", "thailand", "philippines", "indonesia", "malaysia", "singapore",
+    "hong kong", "taiwan", "australia", "new zealand", "canada", "mexico",
+    "brazil", "argentina", "chile", "colombia", "peru", "israel",
+    "united arab emirates", "saudi arabia", "qatar", "egypt",
+    "south africa", "nigeria", "kenya",
+)
+_NON_US_COUNTRY_RE = re.compile(
+    r"\b(" + "|".join(re.escape(c) for c in _NON_US_COUNTRIES) + r")\b", re.I,
+)
+
+# Trailing 2-letter ISO country codes SmartRecruiters/Workday emit in lowercase,
+# e.g. "Wernau (Neckar), BW, de" -> Germany, "Toronto, ON, ca" -> Canada,
+# "Bangalore, Karnataka, in" -> India. MATCHED CASE-SENSITIVELY so we never
+# eat US state codes ("San Francisco, CA", "Wilmington, DE") which are uppercase
+# in every source we ingest. Verified against a sample of the live DB.
+_NON_US_LC_SUFFIX_RE = re.compile(
+    r",\s*(de|uk|gb|fr|nl|be|ch|at|se|no|fi|dk|pl|cz|sk|hu|ro|bg|gr|tr|ru|ua|"
+    r"cn|jp|kr|in|pk|bd|vn|th|ph|sg|hk|tw|au|nz|mx|br|ar|cl|co|il|ae|sa|qa|"
+    r"eg|za|ng|ke|ie|pt|es|it|my|ca|id)\s*$"
+)
+
+
+def is_non_us(job: dict) -> bool:
+    """True when a job's location clearly names a non-US country. Ambiguous
+    or empty locations (`"Remote"`, `""`, `"United States"`, US-state format)
+    return False so US-remote and unstated-country roles stay visible."""
+    loc = job.get("location") or ""
+    if not loc.strip():
+        return False
+    if _NON_US_LC_SUFFIX_RE.search(loc):
+        return True
+    if _NON_US_COUNTRY_RE.search(loc):
+        return True
+    return False
+
+
+def hide_from_feed(job: dict) -> bool:
+    """Rows that shouldn't appear on discovery pages: aggregators you can't
+    apply through (Cloudflare-walled) or postings clearly outside the US."""
+    return is_walled(job) or is_non_us(job)
+
+
+def filter_feed(jobs: list) -> list:
+    """Drop walled + non-US rows from a jobs list. No-op on empty/None."""
+    if not jobs:
+        return []
+    return [j for j in jobs if not hide_from_feed(j)]
 
 
 def render_apply_kit(job: dict):
@@ -447,7 +524,7 @@ if page == "🔎 Find Jobs":
         params["q"] = query
     if hours:
         params["posted_within_hours"] = hours
-    data = api_get("/jobs/", **params) or []
+    data = filter_feed(api_get("/jobs/", **params))
     # Client-side risk filter (API takes one risk; we allow several).
     if risks:
         data = [j for j in data if j.get("sponsorship_risk") in risks]
@@ -471,7 +548,7 @@ elif page == "🔥 Fresh (apply now)":
     params = dict(order_by="posted", posted_within_hours=fh, exclude_rejected=True, limit=300)
     if only_best:
         params["status"] = "New"
-    data = api_get("/jobs/", **params) or []
+    data = filter_feed(api_get("/jobs/", **params))
     if low_comp:
         data = [j for j in data if competition(j.get("source"))[2] == 1]
     st.success(f"{len(data)} jobs posted in the {win.lower()}")
@@ -504,7 +581,7 @@ elif page == "🕵️ JobRight Gap":
                   order_by="exclusivity", limit=1000)
     if whours:
         params["discovered_within_hours"] = whours
-    data = api_get("/jobs/", **params) or []
+    data = filter_feed(api_get("/jobs/", **params))
     if only_sponsors:
         data = [j for j in data if j.get("sponsor_confirmed")]
     data = [j for j in data if j.get("status") != "Applied"]
@@ -587,7 +664,7 @@ elif page == "🎯 Best Matches":
                       limit=3000, slim=True)
         if bm_fresh_days > 0:
             params["discovered_within_hours"] = bm_fresh_days * 24
-        data = api_get("/jobs/", **params) or []
+        data = filter_feed(api_get("/jobs/", **params))
         # exclude_rejected already drops Rejected + Archived server-side.
         if bm_hide_applied:
             data = [j for j in data if j.get("status") != "Applied"]
@@ -726,7 +803,7 @@ elif page == "🎓 Entry Level":
         # else "Both" -> tech_only omitted, no title-role filter
         if el_fresh_days > 0:
             params["discovered_within_hours"] = el_fresh_days * 24
-        data = api_get("/jobs/", **params) or []
+        data = filter_feed(api_get("/jobs/", **params))
         if el_hide_applied:
             data = [j for j in data if j.get("status") != "Applied"]
 
@@ -840,8 +917,8 @@ elif page == "🔴 Posted Today":
         # limit=3000 (API cap): on a busy day >1000 jobs land in 30h, so the old
         # 1000 truncated the oldest-in-window rows BEFORE the freshness filter ran
         # -- i.e. genuinely-today jobs were silently dropped off this page.
-        raw = api_get("/jobs/", order_by="discovered", discovered_within_hours=30,
-                      exclude_rejected=True, limit=3000, slim=True) or []
+        raw = filter_feed(api_get("/jobs/", order_by="discovered", discovered_within_hours=30,
+                                  exclude_rejected=True, limit=3000, slim=True))
         data = []
         for j in raw:
             fresh = posted_freshness(j)
@@ -1004,7 +1081,7 @@ elif page == "🟢 Live Feed":
         params = dict(order_by="discovered", exclude_rejected=True, limit=400, slim=True)
         if fhours:
             params["discovered_within_hours"] = fhours
-        data = api_get("/jobs/", **params) or []
+        data = filter_feed(api_get("/jobs/", **params))
         if show_filter == "Not applied yet":
             data = [j for j in data if j.get("status") != "Applied"]
         elif show_filter == "Applied only":
@@ -1045,7 +1122,7 @@ elif page == "🟢 Live Feed":
                 "company": j.get("company_name"),
                 "location": j.get("location"),
                 "risk": j.get("sponsorship_risk"),
-                "open": apply_url(j),  # Himalayas rows → employer-careers search
+                "open": apply_url(j),
             } for j in subset]
 
             df = pd.DataFrame(rows).set_index("id")
@@ -1108,10 +1185,6 @@ elif page == "🟢 Live Feed":
         if changed:
             st.rerun()
 
-        if any("himalayas.app" in (j.get("job_url") or "") for j in data):
-            st.caption("ℹ️ **Himalayas** rows open to the employer's own careers page "
-                       "(the Himalayas page is Cloudflare-walled and won't load in Chrome).")
-
     live_feed()
 
 elif page == "⚡ Fast Apply":
@@ -1132,7 +1205,7 @@ elif page == "⚡ Fast Apply":
                                     "no autofill possible, several minutes each.")
     min_sc = c3.slider("Min score", 0, 90, 40)
 
-    data = api_get("/jobs/", exclude_rejected=True, order_by="score", limit=1000) or []
+    data = filter_feed(api_get("/jobs/", exclude_rejected=True, order_by="score", limit=1000))
     queue = [j for j in data
              if j.get("status") in ("New", "Need Review")
              and (j.get("match_score") or 0) >= min_sc
@@ -1233,7 +1306,7 @@ elif page == "Today's Best Jobs":
     st.header(f"Today's Best Jobs (score ≥ {_thr})" if _thr else "Today's Best Jobs")
     # "New" status is already gated by the configured threshold in the scheduler,
     # so don't re-filter by score here (that double-filtering hid most matches).
-    df = jobs_df(status="New", min_score=0)
+    df = jobs_df(status="New", min_score=0, feed_only=True)
 
     # Experience filter — hide roles that demand more years than you have.
     EXP_CAPS = {
@@ -1277,7 +1350,7 @@ elif page == "Today's Best Jobs":
 
 elif page == "Need Review":
     st.header("Need Review (unclear sponsorship / level / years)")
-    df = jobs_df(status="Need Review")
+    df = jobs_df(status="Need Review", feed_only=True)
     st.caption(f"{len(df)} jobs")
     for _, row in df.iterrows():
         render_job_card(row.to_dict(), actions=("Approve", "Reject"))

@@ -30,7 +30,7 @@ Everything here is a pure function of data we already store — no network calls
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # --- Source buckets -------------------------------------------------------
@@ -117,7 +117,7 @@ def classify(
     # Freshness: a just-discovered direct posting hasn't propagated yet.
     score = base
     if discovered_at is not None:
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc).replace(tzinfo=None)
         age = now - discovered_at
         if age <= timedelta(hours=24):
             score += 15

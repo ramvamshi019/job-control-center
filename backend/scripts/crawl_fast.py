@@ -20,7 +20,7 @@ import argparse
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -122,7 +122,7 @@ def main() -> None:
                     added += 1
 
                 if company:
-                    company.last_checked_at = datetime.utcnow()
+                    company.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     session.add(company)
                 done += 1
                 if done % 200 == 0:

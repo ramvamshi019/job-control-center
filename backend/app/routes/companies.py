@@ -7,7 +7,7 @@ CRUD for companies + a trigger to crawl one company on demand.
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -64,7 +64,7 @@ def update_company(company_id: int, payload: CompanyUpdate, session: Session = D
         raise HTTPException(404, "Company not found")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(company, key, value)
-    company.updated_at = datetime.utcnow()
+    company.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(company)
     session.commit()
     session.refresh(company)
@@ -109,7 +109,7 @@ def block_company(payload: BlockPayload, session: Session = Depends(get_session)
     already = squashed in filter_engine.blocked_companies()
     if not already:
         with blocklist_path.open("a") as fh:
-            fh.write(f"\n# added via dashboard {datetime.utcnow():%Y-%m-%d}\n{name}\n")
+            fh.write(f"\n# added via dashboard {datetime.now(timezone.utc).replace(tzinfo=None):%Y-%m-%d}\n{name}\n")
         # Bust the in-process cache so the immediate reeval uses the new list.
         filter_engine._blocklist_cache = None
         _ = filter_engine.blocked_companies()
@@ -127,7 +127,7 @@ def block_company(payload: BlockPayload, session: Session = Depends(get_session)
         if not result.passed:
             j.status = "Rejected"
             j.rejection_reason = result.reason
-            j.updated_at = datetime.utcnow()
+            j.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             session.add(j)
             flipped += 1
     session.commit()

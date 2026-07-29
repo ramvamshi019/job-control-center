@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import settings
@@ -59,7 +59,7 @@ def parse_career_url(career_url: str) -> Optional[Tuple[str, str, str]]:
 
 def _posted_at(posted_on: str) -> datetime:
     """Convert 'Posted 7 Days Ago' / 'Posted Today' to an approximate datetime."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     t = (posted_on or "").lower()
     if "today" in t:
         return now

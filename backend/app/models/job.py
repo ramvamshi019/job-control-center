@@ -11,7 +11,8 @@ came from.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from app.utils.dates import utcnow_naive
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -45,7 +46,7 @@ class Job(SQLModel, table=True):
     source: str = Field(default="", index=True, description="crawler/source name")
     description: str = Field(default="")
     posted_at: Optional[datetime] = None
-    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    discovered_at: datetime = Field(default_factory=utcnow_naive)
 
     # Last time this posting was still present on the employer's board. Stamped
     # on EVERY crawl that re-sees it, unlike discovered_at which is write-once.
@@ -53,7 +54,7 @@ class Job(SQLModel, table=True):
     # appearing, and age alone can't tell you that — 43% of stored jobs have no
     # posted_at at all (iCIMS, SmartRecruiters), so date-based retention can
     # never expire them.
-    last_seen_at: Optional[datetime] = Field(default_factory=datetime.utcnow, index=True)
+    last_seen_at: Optional[datetime] = Field(default_factory=utcnow_naive, index=True)
     raw_data_hash: str = Field(default="", index=True, description="dedupe key")
 
     # ---- Computed by the engines ----
@@ -67,5 +68,5 @@ class Job(SQLModel, table=True):
     resume_notes: str = Field(default="")
     cover_letter: str = Field(default="")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow_naive)
+    updated_at: datetime = Field(default_factory=utcnow_naive)

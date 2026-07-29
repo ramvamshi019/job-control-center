@@ -31,7 +31,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -116,7 +116,7 @@ def one_pass(min_score: int, apply: bool) -> dict:
         for c in targets:
             c.priority = "high"
             c.notes = ((c.notes or "") +
-                       f" | promoted->high {datetime.utcnow():%Y-%m-%d} "
+                       f" | promoted->high {datetime.now(timezone.utc).replace(tzinfo=None):%Y-%m-%d} "
                        f"(sponsor score {c.h1b_history_score})").strip(" |")
             s.add(c)
         s.commit()

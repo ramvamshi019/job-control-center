@@ -1692,7 +1692,7 @@ elif page == "Applied":
             mark Applied, so it's a solid approximation)."""
             u = _parse_dt(row.get("updated_at"))
             if not u: return 0
-            return max(0, (datetime.utcnow() - u.replace(tzinfo=None)).days)
+            return max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - u.replace(tzinfo=None)).days)
 
         def _followup_url(row) -> str:
             """Gmail compose URL with a tailored draft. Opens in browser -> user
@@ -2145,7 +2145,7 @@ elif page == "❄️ Frozen Companies":
                     col2.write(f"{c.get('ats_type', '') or '—'}")
                     col3.write(f"priority: {c.get('priority', '')}")
                     if col4.button("❄️ Freeze", key=f"fr_{c['id']}"):
-                        stamp = datetime.utcnow().strftime("%Y-%m-%d")
+                        stamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
                         api_patch(f"/companies/{c['id']}", {
                             "priority": "skip",
                             "notes": ((c.get("notes") or "")
@@ -2163,7 +2163,7 @@ elif page == "❄️ Frozen Companies":
             names = [n.strip() for line in blob.splitlines() for n in line.split(",")]
             names = [n for n in names if n]
             frozen_here, missing = [], []
-            stamp = datetime.utcnow().strftime("%Y-%m-%d")
+            stamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
             for name in names:
                 nl = name.lower()
                 m = next((c for c in non_frozen if nl in (c.get("name") or "").lower()), None)

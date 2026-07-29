@@ -8,7 +8,7 @@ The dashboard talks to these endpoints.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -104,10 +104,10 @@ def list_jobs(
             or_(Job.title.ilike(like), Job.company_name.ilike(like), Job.location.ilike(like))
         )
     if posted_within_hours:
-        cutoff = datetime.utcnow() - timedelta(hours=posted_within_hours)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=posted_within_hours)
         stmt = stmt.where(Job.posted_at >= cutoff)
     if discovered_within_hours:
-        cutoff = datetime.utcnow() - timedelta(hours=discovered_within_hours)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=discovered_within_hours)
         stmt = stmt.where(Job.discovered_at >= cutoff)
     if entry_level_only:
         # OR of every entry-level token, ilike so it's case-insensitive.
@@ -163,7 +163,7 @@ def list_jobs(
             .group_by(Job.company_id)
         ).all():
             counts[cid] = n
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     out = []
     for j in jobs:
         d = j.model_dump()
@@ -229,9 +229,9 @@ def count_jobs(
     if exclude_rejected:
         stmt = stmt.where(Job.status.not_in(["Rejected", "Archived"]))
     if discovered_within_hours:
-        stmt = stmt.where(Job.discovered_at >= datetime.utcnow() - timedelta(hours=discovered_within_hours))
+        stmt = stmt.where(Job.discovered_at >= datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=discovered_within_hours))
     if posted_within_hours:
-        stmt = stmt.where(Job.posted_at >= datetime.utcnow() - timedelta(hours=posted_within_hours))
+        stmt = stmt.where(Job.posted_at >= datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=posted_within_hours))
     return {"count": session.exec(stmt).one()}
 
 
@@ -258,7 +258,7 @@ def update_job(job_id: int, payload: JobStatusUpdate, session: Session = Depends
         job.resume_notes = payload.resume_notes
     if payload.cover_letter is not None:
         job.cover_letter = payload.cover_letter
-    job.updated_at = datetime.utcnow()
+    job.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(job)
     session.commit()
     session.refresh(job)
@@ -277,7 +277,7 @@ def regenerate_materials(
         raise HTTPException(404, "Job not found")
     job.resume_notes = resume_service.generate(job)
     job.cover_letter = cover_letter_service.generate(job, include_opt=include_opt)
-    job.updated_at = datetime.utcnow()
+    job.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(job)
     session.commit()
     session.refresh(job)

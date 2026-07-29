@@ -24,7 +24,7 @@ Feed shape (verified live 2026-07-27):
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from app.crawlers.base import BaseCrawler
@@ -88,6 +88,6 @@ class PinpointCrawler(BaseCrawler):
             job_url=job_url,
             source=self.source_name,
             description=description,
-            posted_at=datetime.utcnow(),  # no date in feed; crawl-time fallback
+            posted_at=datetime.now(timezone.utc).replace(tzinfo=None),  # no date in feed; crawl-time fallback
             raw_data_hash=make_hash(company.name, title, location, job_url),
         )

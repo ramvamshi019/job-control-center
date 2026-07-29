@@ -8,7 +8,8 @@ and notes. One job -> at most one active application in the MVP.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from app.utils.dates import utcnow_naive
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -26,5 +27,5 @@ class Application(SQLModel, table=True):
     resume_version: str = Field(default="", description="e.g. base_data_engineer")
     notes: str = Field(default="")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow_naive)
+    updated_at: datetime = Field(default_factory=utcnow_naive)

@@ -12,7 +12,7 @@ being pruned (avoids delete/re-add churn every cycle).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import and_, func, or_
@@ -29,7 +29,7 @@ PROTECTED = ("Approved", "Applied", "Follow-up")
 
 
 def stale_cutoff(days: Optional[int] = None) -> datetime:
-    return datetime.utcnow() - timedelta(days=days if days is not None else settings.prune_days)
+    return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days if days is not None else settings.prune_days)
 
 
 def is_stale(job: Job, cutoff: Optional[datetime] = None) -> bool:

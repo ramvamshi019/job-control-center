@@ -18,7 +18,7 @@ Two responsibilities:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from sqlmodel import Session, select
@@ -82,7 +82,7 @@ def is_due(company: Company) -> bool:
         return False
     if company.last_checked_at is None:
         return True
-    return datetime.utcnow() - company.last_checked_at >= interval
+    return datetime.now(timezone.utc).replace(tzinfo=None) - company.last_checked_at >= interval
 
 
 def due_companies(session: Session) -> List[Company]:
@@ -124,7 +124,7 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
     # proof that the req is still open, so stamp last_seen_at on it — that, not
     # age, is what later distinguishes a live posting from a ghost.
     new_jobs, reseen, dropped_geo = [], 0, 0
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for j in jobs:
         # Ingest-side US filter: multi-country ATSes (SR/Workday/Greenhouse/etc.)
         # don't filter by country, so foreign postings leak in. Drop them before
@@ -190,8 +190,8 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
         session.add(job)
         summary["saved"] += 1
 
-    company.last_checked_at = datetime.utcnow()
-    company.updated_at = datetime.utcnow()
+    company.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    company.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(company)
     session.commit()
     return summary

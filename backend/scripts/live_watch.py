@@ -19,7 +19,7 @@ import argparse
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -36,7 +36,7 @@ log = get_logger("live_watch")
 def fresh_alert_jobs(session, max_age_hours: int = 48):
     """Alert-worthy jobs: Best bucket ('New'), confirmed-sponsor (low risk),
     posted within max_age_hours. Returns list of (id, title, company)."""
-    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=max_age_hours)
     rows = session.exec(
         select(Job).where(Job.status == "New",
                           Job.sponsorship_risk == "low",

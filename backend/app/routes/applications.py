@@ -7,7 +7,7 @@ record applied/follow-up dates, resume version, and notes.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -50,7 +50,7 @@ def create_application(payload: ApplicationCreate, session: Session = Depends(ge
     session.add(app_row)
     # Keep the job's status in sync.
     job.status = payload.status if payload.status in ("Approved", "Applied") else job.status
-    job.updated_at = datetime.utcnow()
+    job.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(job)
     session.commit()
     session.refresh(app_row)
@@ -64,7 +64,7 @@ def update_application(application_id: int, payload: ApplicationUpdate, session:
         raise HTTPException(404, "Application not found")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(app_row, key, value)
-    app_row.updated_at = datetime.utcnow()
+    app_row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(app_row)
 
     # Mirror status onto the job so the dashboard stays consistent.

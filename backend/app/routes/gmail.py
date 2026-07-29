@@ -18,7 +18,7 @@ import imaplib
 import json
 import os
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -108,7 +108,7 @@ def save_settings(payload: GmailSettingsIn):
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"connection failed: {e}"}
     _save_settings({"email": email, "app_password": pw,
-                     "saved_at": datetime.utcnow().isoformat()})
+                     "saved_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()})
     return {"ok": True, "login_test": login_test}
 
 
@@ -139,7 +139,7 @@ def poll_now():
         return {"error": str(e)}
     # Stamp last_poll on state.
     st = _load_state()
-    st["last_poll"] = datetime.utcnow().isoformat()
+    st["last_poll"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     try:
         with open(STATE_PATH, "w") as f:
             json.dump(st, f)

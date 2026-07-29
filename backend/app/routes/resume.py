@@ -10,7 +10,7 @@ POST /resume/match   (multipart: file=<résumé>, plus optional form filters)
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -86,7 +86,7 @@ def _match(data: bytes, filename: str, experience_levels: str,
                        Job.posted_at, Job.description)
                 .where(Job.status.in_(("New", "Need Review"))))  # type: ignore
         if posted_within_hours and posted_within_hours > 0:
-            cutoff = datetime.utcnow() - timedelta(hours=posted_within_hours)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=posted_within_hours)
             stmt = stmt.where(Job.posted_at != None, Job.posted_at >= cutoff)  # noqa: E711
         rows = session.exec(stmt.order_by(Job.match_score.desc()).limit(CANDIDATE_CAP)).all()
 

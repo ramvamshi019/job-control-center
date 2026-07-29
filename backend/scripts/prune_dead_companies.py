@@ -34,7 +34,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -73,7 +73,7 @@ def _demand(counts: dict[str, int]) -> float:
 
 
 def one_pass(min_age_days: int, apply: bool) -> dict:
-    cutoff = datetime.utcnow() - timedelta(days=min_age_days)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=min_age_days)
 
     with session_scope() as s:
         # Every currently-active low-tier company plus a flag for whether it has
@@ -142,7 +142,7 @@ def one_pass(min_age_days: int, apply: bool) -> dict:
         for c in targets:
             c.is_active = False
             c.notes = ((c.notes or "") +
-                       f" | deactivated {datetime.utcnow():%Y-%m-%d} "
+                       f" | deactivated {datetime.now(timezone.utc).replace(tzinfo=None):%Y-%m-%d} "
                        f"dead-weight (never returned a job in "
                        f"{min_age_days}+ days)").strip(" |")
             s.add(c)

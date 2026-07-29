@@ -40,7 +40,7 @@ for NEW jobs only (post-dedupe), so the per-posting detail call stays cheap.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from app.config import settings
@@ -165,7 +165,7 @@ class SmartRecruitersCrawler(BaseCrawler):
         # Only stamp a date that won't get the posting wrongly pruned.
         posted = parse_date(d.get("releasedDate"))
         if posted is not None:
-            cutoff = datetime.utcnow() - timedelta(days=settings.prune_days)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=settings.prune_days)
             if posted >= cutoff:
                 job.posted_at = posted
             # else: ancient creation date on a live posting -> leave None (kept).

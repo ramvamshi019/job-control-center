@@ -28,7 +28,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -72,7 +72,7 @@ def collect(today_iso: str) -> dict:
     c = sqlite3.connect(DB_PATH)
     r: dict = {
         "date": today_iso,
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
         "config": {
             "prune_days": settings.prune_days,
             "sponsor_prune_days": settings.sponsor_prune_days,
@@ -313,7 +313,7 @@ def render_text(r: dict, prior: dict | None) -> str:
 
 def main() -> int:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
 
     prior = _load_prior(today)
     r = collect(today)
@@ -328,7 +328,7 @@ def main() -> int:
 
     # Trim reports older than 90 days -- if history matters longer than that,
     # copy them out; the reports/ dir is intentionally not a permanent archive.
-    horizon = datetime.utcnow() - timedelta(days=90)
+    horizon = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)
     for p in REPORT_DIR.glob("audit-*"):
         try:
             d = datetime.strptime(p.name.split("-", 1)[1][:10], "%Y-%m-%d")

@@ -30,7 +30,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from itertools import islice as _islice
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -134,7 +134,7 @@ def main() -> int:
     if not hits:
         return 0
 
-    stamp = datetime.utcnow().strftime("%Y-%m-%d")
+    stamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
     inserted = 0
     activated = 0
     with session_scope() as s:

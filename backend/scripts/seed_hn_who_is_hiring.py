@@ -29,7 +29,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable
 
 import requests
@@ -189,7 +189,7 @@ def _persist(hits: list[dict], stamp: str, source_note: str, priority: str = "me
 
 def run(months: int = 3, workers: int = 8) -> dict:
     """One end-to-end pass. Returns summary counts."""
-    stamp = datetime.utcnow().strftime("%Y-%m-%d")
+    stamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
     thread_ids = _latest_thread_ids(months)
     log.info("HN: fetching last %d months (%d threads)", months, len(thread_ids))
     if not thread_ids:

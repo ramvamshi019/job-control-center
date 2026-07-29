@@ -14,7 +14,8 @@ the token either way.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from app.utils.dates import utcnow_naive
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -36,5 +37,5 @@ class Company(SQLModel, table=True):
     is_active: bool = Field(default=True, index=True)
     notes: str = Field(default="")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow_naive)
+    updated_at: datetime = Field(default_factory=utcnow_naive)

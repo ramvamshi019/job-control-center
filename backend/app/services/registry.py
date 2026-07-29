@@ -40,7 +40,7 @@ AUTOMATIC REACTIVATE:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import case, func
@@ -147,7 +147,7 @@ def should_archive(
     # a sponsor to over-eager archiving costs more than a wasted crawl.
     if (company.h1b_history_score or 0) >= settings.sponsor_score_threshold:
         return None
-    now = now or datetime.utcnow()
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     if company.created_at is None or company.created_at > now - timedelta(days=ARCHIVE_AFTER_DAYS):
         return None
     if jobs_30d > 0:
@@ -216,7 +216,7 @@ def compute_deltas(
     Batched aggregates: one query returns (company_id, jobs_ever, jobs_30d)
     for every company that has any jobs, rather than N per-company queries.
     """
-    now = now or datetime.utcnow()
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
 
     # (company_id, jobs_ever, jobs_30d) in one shot. Companies with no jobs
     # are absent from this dict and default to (0, 0). SUM(CASE ... ELSE 0)
@@ -238,7 +238,7 @@ def compute_deltas(
 
     companies = session.exec(select(Company)).all()
     delta = RegistryDelta(lifecycle_counts={})
-    stamp = datetime.utcnow().strftime("%Y-%m-%d")
+    stamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
 
     for c in companies:
         jobs_ever, jobs_30d = yield_by_id.get(c.id, (0, 0))
@@ -303,7 +303,7 @@ def registry_stats(session: Session) -> dict:
 
     hiring_24h = session.exec(
         select(func.count(func.distinct(Job.company_id)))
-        .where(Job.discovered_at > datetime.utcnow() - timedelta(hours=24))
+        .where(Job.discovered_at > datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24))
     ).one()
 
     return {

@@ -28,7 +28,7 @@ import csv
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -173,7 +173,7 @@ def one_pass(min_approvals: int, dry_run: bool, workers: int, limit: int,
                 h1b_history_score=score_for(appr),
                 priority=priority,  # override with --priority medium (6h) etc.
                 is_active=True,
-                notes=f"h1b-seeded {datetime.utcnow():%Y-%m-%d}; "
+                notes=f"h1b-seeded {datetime.now(timezone.utc).replace(tzinfo=None):%Y-%m-%d}; "
                       f"{appr} USCIS approvals; {n} live postings"))
             if len(batch) >= 200:
                 s.add_all(batch); s.commit(); summary["added"] += len(batch); batch = []

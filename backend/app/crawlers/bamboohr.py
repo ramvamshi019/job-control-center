@@ -12,7 +12,7 @@ description from title/department/location and treat first-seen as posted date
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from app.crawlers.base import BaseCrawler
@@ -83,7 +83,7 @@ class BambooHRCrawler(BaseCrawler):
             job_url=job_url,
             source=self.source_name,
             description=description,
-            posted_at=datetime.utcnow(),  # provisional; enrich_posted_date() fixes it
+            posted_at=datetime.now(timezone.utc).replace(tzinfo=None),  # provisional; enrich_posted_date() fixes it
             raw_data_hash=make_hash(company.name, title, location, job_url),
         )
 

@@ -18,7 +18,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -82,7 +82,7 @@ def run() -> dict:
             if it and not it.get("deleted"):
                 items.append(it)
 
-    stamp = datetime.utcnow().strftime("%Y-%m-%d")
+    stamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
     hits: list[dict] = []
     for it in items:
         title = it.get("title", "")

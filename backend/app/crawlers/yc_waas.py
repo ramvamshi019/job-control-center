@@ -61,7 +61,7 @@ from __future__ import annotations
 import html as _html
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from app.crawlers.base import BaseCrawler
@@ -163,7 +163,7 @@ def _approx_posted_at(created_at: str) -> Optional[datetime]:
         return None
     s = str(created_at).lower().strip()
     if "less than" in s or "just now" in s:
-        return datetime.utcnow()
+        return datetime.now(timezone.utc).replace(tzinfo=None)
     m = re.search(r"(\d+)\s*(day|week|month|year)", s)
     if not m:
         # "a month", "an hour", "over a year" etc. -> treat the unit as 1.
@@ -176,7 +176,7 @@ def _approx_posted_at(created_at: str) -> Optional[datetime]:
     days = n * _REL_UNIT_DAYS.get(unit, 0)
     if days <= 0:
         return None
-    return datetime.utcnow() - timedelta(days=days)
+    return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
 
 class YCWaaSCrawler(BaseCrawler):

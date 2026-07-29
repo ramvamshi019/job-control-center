@@ -13,6 +13,13 @@ from typing import Optional
 from dateutil import parser as _parser
 
 
+def utcnow_naive() -> datetime:
+    """Naive UTC datetime -- the SQLModel columns store naive so this matches.
+    Uses timezone-aware `now()` under the hood then strips tzinfo, so it does
+    NOT trip Python 3.12+ `datetime.utcnow()` deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def parse_date(value) -> Optional[datetime]:
     """Parse almost any date string / epoch into a naive UTC datetime."""
     if value is None or value == "":
@@ -34,4 +41,4 @@ def hours_since(dt: Optional[datetime]) -> Optional[float]:
     """How many hours ago was `dt`? None if unknown."""
     if dt is None:
         return None
-    return (datetime.utcnow() - dt).total_seconds() / 3600.0
+    return (datetime.now(timezone.utc).replace(tzinfo=None) - dt).total_seconds() / 3600.0

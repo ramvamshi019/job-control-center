@@ -113,7 +113,7 @@ def main():
     print(f"already correct   : {unchanged}")
     print(f"not on board / 404: {missing}  (left untouched)")
 
-    cutoff = datetime.utcnow() - timedelta(days=10)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=10)
     would_prune = sum(1 for iso, _ in updates if datetime.fromisoformat(iso) < cutoff)
     print(f"\nnewly older than the 10-day window: {would_prune}"
           f"  ({100*would_prune/max(len(updates),1):.0f}% of corrections)")

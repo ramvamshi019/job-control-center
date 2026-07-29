@@ -36,7 +36,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, Optional
 from urllib.parse import urlparse
 
@@ -392,7 +392,7 @@ def one_pass(dry_run: bool = False, workers: int = 16, limit: int = 0,
             batch.append(Company(
                 name=name, career_url=tok, ats_type=ats,
                 h1b_history_score=score, priority=prio, is_active=True,
-                notes=f"auto-discovered {datetime.utcnow():%Y-%m-%d}; {n} live postings"))
+                notes=f"auto-discovered {datetime.now(timezone.utc).replace(tzinfo=None):%Y-%m-%d}; {n} live postings"))
             if len(batch) >= 200:
                 s.add_all(batch); s.commit(); summary["added"] += len(batch); batch = []
         if batch:

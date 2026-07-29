@@ -33,7 +33,7 @@ import re
 import ssl
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -254,7 +254,7 @@ def run() -> dict:
         M.select("INBOX", readonly=True)
         # Fetch UIDs newer than last seen -- Gmail assigns monotonic UIDs.
         criteria = f"UID {last_uid + 1}:*" if last_uid else "SINCE " + \
-                   (datetime.utcnow() - timedelta(days=14)).strftime("%d-%b-%Y")
+                   (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=14)).strftime("%d-%b-%Y")
         typ, data = M.uid("search", None, criteria)
         if typ != "OK":
             return {"configured": True, "error": "search_failed"}
@@ -296,7 +296,7 @@ def run() -> dict:
             try:
                 received_at = email_pkg.utils.parsedate_to_datetime(date_hdr)
             except Exception:  # noqa: BLE001
-                received_at = datetime.utcnow()
+                received_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # Insert into job_messages if not already seen
             with engine.connect() as c:

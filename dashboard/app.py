@@ -291,6 +291,25 @@ def apply_url(job: dict) -> str:
     return u
 
 
+def referral_url(job: dict) -> str:
+    """LinkedIn people-search URL for finding a warm intro at the target company.
+    Strips level/seniority words from the title so the search returns employees
+    at any level in the same role area -- widens the hit set considerably vs.
+    a literal "Senior Software Engineer II" query. Users must be logged into
+    LinkedIn for the search to actually rank by connection degree."""
+    from urllib.parse import quote as _q
+    company = (job.get("company_name") or "").strip()
+    title = (job.get("title") or "").strip()
+    simple = re.sub(
+        r"\b(senior|sr\.?|junior|jr\.?|staff|principal|lead|manager|director|"
+        r"associate|entry.?level|new.?grad|intern(ship)?|i{1,3}\b|iv|v|\d{1,2})\b",
+        " ", title, flags=re.I)
+    simple = re.sub(r"\s+", " ", simple).strip() or "engineer"
+    keywords = f"{company} {simple}"
+    return ("https://www.linkedin.com/search/results/people/?"
+            f"keywords={_q(keywords)}&origin=GLOBAL_SEARCH_HEADER")
+
+
 # --- Feed hygiene: hide rows the user can't act on ---------------------------
 # The discovery pages (Posted Today, Live Feed, Best Matches, Fresh, Fast Apply,
 # Entry Level, Find Jobs, JobRight Gap) all share the same two failure modes:
@@ -721,6 +740,7 @@ elif page == "🎯 Best Matches":
                 "location": j.get("location"),
                 "risk": j.get("sponsorship_risk"),
                 "open": apply_url(j),
+                "referral": referral_url(j),
             } for j in subset]
             df = pd.DataFrame(rows).set_index("id")
             editor_key = f"bm_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
@@ -730,10 +750,10 @@ elif page == "🎯 Best Matches":
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "sponsor", "seen", "posted", "score", "title", "company",
-                          "location", "risk", "open"],
+                          "location", "risk", "open", "referral"],
                 column_order=["dismiss", "status", "sponsor", "seen", "posted",
                               "score", "title", "company", "location", "risk",
-                              "open", "applied"],
+                              "open", "referral", "applied"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
@@ -744,6 +764,11 @@ elif page == "🎯 Best Matches":
                     "posted": st.column_config.TextColumn(
                         "posted", help="Source-stated posting date (blank for sources that hide it)."),
                     "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                    "referral": st.column_config.LinkColumn(
+                        "🤝 referral", display_text="LinkedIn ↗",
+                        help="LinkedIn people search for this company + role. Message a "
+                             "1st-degree connection for a warm intro BEFORE applying -- "
+                             "referred apps get 5-10x more callbacks than cold ones."),
                     "score": st.column_config.NumberColumn("score", format="%d"),
                 },
             )
@@ -1715,6 +1740,7 @@ elif page == "Applied":
         df["days_ago"] = df.apply(lambda r: _days_since(r), axis=1)
         df["apply"] = df.apply(lambda r: apply_url(r.to_dict()), axis=1)
         df["follow_up"] = df.apply(lambda r: _followup_url(r.to_dict()), axis=1)
+        df["referral"] = df.apply(lambda r: referral_url(r.to_dict()), axis=1)
         df["email_guess"] = df.apply(lambda r: f"careers@{_guess_domain(r.to_dict())}" if _guess_domain(r.to_dict()) else "(couldn't guess)", axis=1)
 
         due = int((df["days_ago"] >= 4).sum())
@@ -1724,7 +1750,7 @@ elif page == "Applied":
         m3.metric("Avg days since apply", f"{df['days_ago'].mean():.1f}")
 
         show = ["days_ago", "title", "company_name", "location", "match_score",
-                "sponsorship_risk", "email_guess", "follow_up", "apply"]
+                "sponsorship_risk", "email_guess", "follow_up", "referral", "apply"]
         st.dataframe(
             df[[c for c in show if c in df.columns]].sort_values("days_ago", ascending=False),
             use_container_width=True, hide_index=True,
@@ -1734,13 +1760,15 @@ elif page == "Applied":
                 "email_guess":    st.column_config.TextColumn("suggested to", help="Best-guess address — verify before sending."),
                 "follow_up":      st.column_config.LinkColumn("📧 draft follow-up", display_text="draft ↗",
                                     help="Opens Gmail compose in a new tab with a tailored message pre-filled. Tone shifts with days-since-applied (day 1-3 intro / day 4-10 follow-up / day 11+ last check-in)."),
+                "referral":       st.column_config.LinkColumn("🤝 find referral", display_text="LinkedIn ↗",
+                                    help="Opens LinkedIn people search for this company + role. Referred applications get 5-10x more callbacks than cold ones. Message a 1st-degree connection at the company for a warm intro before the recruiter sees your app."),
                 "apply":          st.column_config.LinkColumn("apply page", display_text="open ↗"),
             }
         )
-        st.caption("📧 Click a **draft ↗** — Gmail opens with the message pre-written. "
-                   "Verify the recipient (`careers@...` is a best guess; a real recruiter email "
-                   "from your confirmation email works better if you have it), tweak the body if "
-                   "you want, and send. Draft tone auto-adjusts by days-since-applied.")
+        st.caption("📧 **draft ↗** opens Gmail compose · 🤝 **LinkedIn ↗** finds people at "
+                   "the company you might know for a warm intro. Send the follow-up email "
+                   "AFTER you've reached out to a connection — recruiters recognize referrals "
+                   "and prioritize them.")
 
 elif page == "Rejected":
     st.header("Rejected")

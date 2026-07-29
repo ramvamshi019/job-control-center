@@ -54,7 +54,13 @@ PRIORITY_INTERVALS = {
     # lane is 6x/day instead of 8x, demand drops to ~46,900/day (87%), which
     # restores headroom AND leaves room to seed more sponsors. Six checks a day
     # is still well inside the useful window for a job search.
-    "high": timedelta(hours=4),      # confirmed-sponsor / good-fit watchlist
+    # 4h -> 2h (2026-07-29). Post box-resize (4vCPU/8GB, workers 12) livewatch
+    # was finishing every 60s cycle with due=0 -- capacity fully unused. With
+    # 4,694 high companies, dropping to 2h means 12 checks/day = ~56k/day just
+    # for high (+ 33k low + 0.8k medium = 90k/day total) vs measured ceiling
+    # ~120-150k/day. Halves the lag from post -> Posted Today on the sponsor
+    # watchlist, which is what actually matters for a job search in flight.
+    "high": timedelta(hours=2),      # confirmed-sponsor / good-fit watchlist
     "medium": timedelta(hours=6),
     "low": timedelta(hours=24),
     "skip": None,  # never

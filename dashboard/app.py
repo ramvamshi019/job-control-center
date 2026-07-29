@@ -463,7 +463,7 @@ page = st.sidebar.radio(
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
      "📬 Inbox", "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
-     "Applied", "Rejected", "🗑️ Archived", "Companies", "Stats",
+     "Applied", "🗑️ Deleted", "Rejected", "Companies", "Stats",
      "📋 Daily Audit"],
 )
 
@@ -556,10 +556,12 @@ if page == "🔎 Find Jobs":
     window = c2.selectbox("Posted within", ["Any time", "Last 24 hours", "Last 3 days", "Last 7 days", "Last 30 days"])
     sort = c3.selectbox("Sort by", ["Best match", "Newest posted", "Recently discovered"])
 
-    c4, c5, c6 = st.columns([2, 3, 2])
+    c4, c5, c6, c7 = st.columns([2, 3, 2, 2])
     min_score = c4.slider("Min score", 0, 100, 0, step=5)
     risks = c5.multiselect("Sponsorship risk", ["low", "medium", "high", "unknown"], default=["low", "medium"])
     hide_rejected = c6.checkbox("Hide rejected", value=True)
+    fj_hide_applied = c7.checkbox("Hide applied", value=True,
+                                  help="Applied jobs are on the Applied page; hide from search to avoid re-applying.")
 
     hours = {"Any time": None, "Last 24 hours": 24, "Last 3 days": 72,
              "Last 7 days": 168, "Last 30 days": 720}[window]
@@ -574,6 +576,8 @@ if page == "🔎 Find Jobs":
     # Client-side risk filter (API takes one risk; we allow several).
     if risks:
         data = [j for j in data if j.get("sponsorship_risk") in risks]
+    if fj_hide_applied:
+        data = [j for j in data if j.get("status") != "Applied"]
 
     st.success(f"{len(data)} matching jobs")
     for job in data[:150]:
@@ -597,6 +601,8 @@ elif page == "🔥 Fresh (apply now)":
     data = filter_feed(api_get("/jobs/", **params))
     if low_comp:
         data = [j for j in data if competition(j.get("source"))[2] == 1]
+    # Always hide Applied on Fresh — the whole point is "you haven't done this yet".
+    data = [j for j in data if j.get("status") != "Applied"]
     st.success(f"{len(data)} jobs posted in the {win.lower()}")
     if not data:
         st.info("Nothing posted in this window yet — widen the window or check back soon.")
@@ -1329,7 +1335,9 @@ elif page == "🟢 Live Feed":
 
     colA, colB, colC = st.columns([2, 2, 2])
     feed_window = colA.selectbox("Show jobs discovered within", ["Last 24 hours", "Last 3 days", "Last 7 days", "All"])
-    show_filter = colB.selectbox("Show", ["Everything", "Not applied yet", "Applied only"])
+    show_filter = colB.selectbox("Show", ["Not applied yet", "Everything", "Applied only"],
+                                 help="Default is 'Not applied yet' so you don't accidentally re-apply. "
+                                      "'Everything' shows all jobs including already-applied.")
     auto = colC.checkbox("🔄 Auto-refresh (every 30s)", value=True)
     fhours = {"Last 24 hours": 24, "Last 3 days": 72, "Last 7 days": 168, "All": None}[feed_window]
 
@@ -1778,8 +1786,8 @@ elif page == "Rejected":
         show = ["title", "company_name", "rejection_reason", "match_score", "job_url"]
         st.dataframe(df[[c for c in show if c in df.columns]], use_container_width=True)
 
-elif page == "🗑️ Archived":
-    st.header("🗑️ Archived")
+elif page == "🗑️ Deleted":
+    st.header("🗑️ Deleted")
     st.caption("Jobs you dismissed with the 🗑️ box (on Posted Today and other lists). They're "
                "kept out of your feeds and protected from re-scoring, so they won't come back. "
                "Tick **Restore** to send one back to New.")

@@ -79,8 +79,12 @@ services:
     volumes:
       - jcc-data:/app/backend/data/db
     cpus: 1
-    mem_limit: 700m
-    memswap_limit: 1g
+    # 2026-07-30: bumped 700m → 1500m. auto_discover fingerprint scan OOM'd
+    # at ~2900/6658 candidates loading company HTML into memory. New cap lets
+    # the full scan complete + surfaces Oracle HCM / SuccessFactors / Taleo /
+    # etc. tenants that would otherwise stay dormant.
+    mem_limit: 1500m
+    memswap_limit: 2g
     restart: unless-stopped
     depends_on: [backend]
 

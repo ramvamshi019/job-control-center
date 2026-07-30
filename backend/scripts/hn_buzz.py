@@ -79,7 +79,7 @@ def _algolia_query(company: str) -> dict:
         "query": f'"{company}"',   # exact-quoted so "Amazon" doesn't match "Amazon Basics" stories primarily
         "tags": "story",
         "numericFilters": f"created_at_i>{since}",
-        "hitsPerPage": 5,
+        "hitsPerPage": 15,  # Pull more; extract() filters to top 3 by points threshold
     }
     url = f"{ALGOLIA_URL}?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "JCC/1.0"})
@@ -91,18 +91,24 @@ def _algolia_query(company: str) -> dict:
         return {}
 
 
+MIN_POINTS = 15   # Under 15pts is usually noise (single-vote self-posts, spam)
+
+
 def _extract(hits: list[dict]) -> list[dict]:
     out = []
-    for h in hits[:3]:
+    for h in hits:
+        if len(out) >= 3:
+            break
         title = h.get("title") or h.get("story_title") or ""
         obj_id = h.get("objectID")
+        points = h.get("points") or 0
         story_url = f"https://news.ycombinator.com/item?id={obj_id}" if obj_id else None
-        if not title or not story_url:
+        if not title or not story_url or points < MIN_POINTS:
             continue
         out.append({
             "title": title[:180],
             "url": story_url,
-            "points": h.get("points") or 0,
+            "points": points,
             "created_at": h.get("created_at") or "",
         })
     return out

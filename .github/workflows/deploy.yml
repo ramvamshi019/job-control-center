@@ -1,0 +1,87 @@
+name: deploy
+
+# Runs after tests pass on a push to main. SSHs to the droplet, pulls the
+# new commit, rebuilds only the containers whose Dockerfile/build context
+# actually changed (Docker Compose caches unchanged layers), then runs
+# verify.sh — which curls the health endpoints and exits non-zero on
+# failure. A failed verify fails the GitHub Action, which triggers the
+# usual repo email + a red X on the commit.
+#
+# One-time setup:
+#   1. Generate a deploy-only SSH keypair on your Mac:
+#        ssh-keygen -t ed25519 -C "gh-deploy" -f ~/.ssh/jcc_deploy -N ""
+#   2. Add the PUBLIC key to the droplet:
+#        cat ~/.ssh/jcc_deploy.pub | ssh root@143.198.188.116 \
+#            'cat >> ~/.ssh/authorized_keys'
+#   3. Add these 3 secrets in GitHub → Settings → Secrets and variables →
+#      Actions → New repository secret:
+#        DEPLOY_SSH_KEY    ← contents of ~/.ssh/jcc_deploy (private, full file)
+#        DEPLOY_HOST       ← 143.198.188.116
+#        DEPLOY_USER       ← root
+#   4. Push any commit. Watch the run at github.com/ramvamshi019/…/actions
+#
+# Rollback on the droplet if a bad deploy slips through:
+#   cd /root/job-control-center && git reset --hard HEAD~1 && \
+#       docker compose up -d --build
+
+on:
+  workflow_run:
+    workflows: ["tests"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    # Only run when the tests workflow finished successfully AND this was a
+    # push (not a PR — PRs should never deploy).
+    if: >
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight — required secrets present?
+        run: |
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ] || \
+             [ -z "${{ secrets.DEPLOY_HOST }}" ] || \
+             [ -z "${{ secrets.DEPLOY_USER }}" ]; then
+            echo "❌ Missing deploy secrets. Follow the setup in deploy.yml header."
+            exit 1
+          fi
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust droplet host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy (git pull + docker compose up -d + verify)
+        run: |
+          ssh -o ServerAliveInterval=30 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} <<'REMOTE'
+            set -e
+            cd /root/job-control-center
+            echo "--- git fetch + reset to origin/main ---"
+            git fetch --quiet origin main
+            OLD=$(git rev-parse --short HEAD)
+            git reset --hard origin/main
+            NEW=$(git rev-parse --short HEAD)
+            if [ "$OLD" = "$NEW" ]; then
+              echo "already at $NEW — nothing to deploy"
+              exit 0
+            fi
+            echo "deploying $OLD → $NEW"
+            echo "--- docker compose up -d --build ---"
+            docker compose up -d --build
+            echo "--- verify.sh ---"
+            ./deploy/verify.sh
+          REMOTE
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Auto-deploy failed. Check the droplet."
+          echo "Rollback: ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \\"
+          echo "    'cd /root/job-control-center && git reset --hard HEAD~1 && docker compose up -d --build'"

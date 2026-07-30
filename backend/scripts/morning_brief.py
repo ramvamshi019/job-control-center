@@ -111,6 +111,19 @@ def _stats_last_24h() -> dict:
         if ai_top:
             top = [dict(r._mapping) for r in ai_top]
             ai_ranked = True
+            # Enrich each top job with HN buzz (populated by hn_buzz.py at 05:20 UTC)
+            try:
+                buzz_rows = c.execute(text(
+                    "SELECT company_name, mentions FROM hn_buzz WHERE company_name IN "
+                    "(" + ",".join(f":c{i}" for i in range(len(top))) + ")"
+                ), {f"c{i}": t["company_name"] for i, t in enumerate(top)}).all()
+                import json as _json
+                buzz_map = {r[0]: _json.loads(r[1] or "[]") for r in buzz_rows}
+                for t in top:
+                    t["hn_buzz"] = buzz_map.get(t["company_name"], [])
+            except Exception:
+                for t in top:
+                    t["hn_buzz"] = []
         else:
             top_raw = c.execute(text("""
                 SELECT j.id, j.title, j.company_name, j.location, j.job_url, j.match_score
@@ -266,6 +279,9 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
         plain.append(f"      {j['job_url']}")
         if stats.get("ai_ranked") and j.get("pitch_line"):
             plain.append(f"      Pitch: {j['pitch_line']}")
+        for m in (j.get("hn_buzz") or [])[:2]:
+            plain.append(f"      🗣️ HN ({m.get('points',0)}pt): {m['title']}")
+            plain.append(f"         {m['url']}")
     plain.append("")
     fups = stats.get("followups") or []
     if fups:
@@ -302,12 +318,17 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             pitch = (f"<div style='margin-top:6px;padding:6px 10px;background:#f6f8fa;"
                      f"border-left:2px solid #0969da;font-size:13px;color:#333;font-style:italic'>"
                      f"&ldquo;{j['pitch_line']}&rdquo;</div>")
+        buzz = ""
+        for m in (j.get("hn_buzz") or [])[:2]:
+            buzz += (f"<div style='margin-top:4px;font-size:12px;color:#666'>"
+                     f"🗣️ HN: <a href='{m['url']}' style='color:#0969da'>{m['title']}</a> "
+                     f"<span style='color:#999'>({m.get('points',0)}pt)</span></div>")
         return (
             f"<tr><td style='padding:8px 10px;background:{badge_bg};color:#fff;"
             f"font-weight:700;border-radius:4px;vertical-align:top'>{score}</td>"
             f"<td style='padding:8px 12px'><b>{j['title']}</b><br>"
             f"<span style='color:#666'>{j['company_name']} · {j['location']}</span><br>"
-            f"<a href='{j['job_url']}'>Apply →</a>{pitch}</td></tr>"
+            f"<a href='{j['job_url']}'>Apply →</a>{pitch}{buzz}</td></tr>"
         )
     top_html = "".join(_row(j) for j in stats["top_jobs"])
     top_heading = ("🚀 Top 5 AI-ranked apply queue"

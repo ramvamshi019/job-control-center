@@ -189,6 +189,37 @@ def _stats_last_24h() -> dict:
             false_neg_rate = round(100 * fs_keep / fs_total, 1) if fs_total else 0
         except Exception:
             keep_rows, fs_total, fs_keep, false_neg_rate = [], 0, 0, 0
+
+        # Application pace: apps today, this week, 7-day rolling avg, days since last app.
+        # 'Applied' status flip is our proxy — updated_at is when it flipped.
+        d1 = now - timedelta(days=1)
+        d7 = now - timedelta(days=7)
+        d14 = now - timedelta(days=14)
+        try:
+            apps_24h = c.execute(text(
+                "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :d"
+            ), {"d": d1}).scalar() or 0
+            apps_7d = c.execute(text(
+                "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :d"
+            ), {"d": d7}).scalar() or 0
+            apps_prev_7d = c.execute(text(
+                "SELECT COUNT(*) FROM jobs WHERE status='Applied' "
+                "AND updated_at >= :d14 AND updated_at < :d7"
+            ), {"d14": d14, "d7": d7}).scalar() or 0
+            last_app_row = c.execute(text(
+                "SELECT updated_at FROM jobs WHERE status='Applied' "
+                "ORDER BY updated_at DESC LIMIT 1"
+            )).fetchone()
+            if last_app_row and last_app_row[0]:
+                # SQLite datetime column comes back as string. Parse via julianday to get days.
+                days_since_last = c.execute(text(
+                    "SELECT CAST(julianday(:now) - julianday(:t) AS INTEGER)"
+                ), {"now": now, "t": last_app_row[0]}).scalar()
+            else:
+                days_since_last = None
+        except Exception:
+            apps_24h = apps_7d = apps_prev_7d = 0
+            days_since_last = None
     return {
         "total_jobs": total_jobs, "crawled_24h": crawled_24h,
         "survived_24h": survived_24h, "new_24h": new_24h,
@@ -202,6 +233,12 @@ def _stats_last_24h() -> dict:
             "sampled": fs_total,
             "keep_count": fs_keep,
             "false_neg_rate": false_neg_rate,
+        },
+        "pace": {
+            "apps_24h": apps_24h,
+            "apps_7d": apps_7d,
+            "apps_prev_7d": apps_prev_7d,
+            "days_since_last": days_since_last,
         },
     }
 
@@ -254,11 +291,27 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     msg["From"] = to_addr
     msg["To"] = to_addr
 
+    pace = stats.get("pace") or {}
+    drought_msg = ""
+    if pace.get("days_since_last") is not None and pace["days_since_last"] >= 2:
+        drought_msg = f"⚠️ DROUGHT: {pace['days_since_last']}d since your last application"
+    elif pace.get("apps_7d", 0) < 5:
+        drought_msg = f"⚠️ BEHIND PACE: only {pace['apps_7d']} apps in the last 7d"
+
     # Plain-text fallback
     plain = [
         f"JCC morning brief for {now_str}",
         "",
         f"{ai_take}" if ai_take else "(AI summary disabled)",
+        "",
+    ]
+    if drought_msg:
+        plain += [drought_msg, ""]
+    plain += [
+        "-- Application pace --",
+        f"  Last 24h:    {pace.get('apps_24h', 0)}",
+        f"  This week:   {pace.get('apps_7d', 0)}   (last week: {pace.get('apps_prev_7d', 0)})",
+        f"  Days since last app: {pace.get('days_since_last', '?')}",
         "",
         "-- Overnight numbers --",
         f"  Jobs crawled:      {stats['crawled_24h']:,}",
@@ -378,10 +431,35 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
         else:
             body = "<p style='color:#1a7f37;font-size:14px'>✅ Filter looks tight — Claude agreed with every reject in tonight's sample.</p>"
         fs_html = header + body
+    # Drought banner
+    drought_html = ""
+    if drought_msg:
+        drought_html = (f"<div style='background:#fee;border:2px solid #b91c1c;"
+                        f"padding:12px 16px;border-radius:6px;margin:12px 0;"
+                        f"color:#7f1d1d;font-weight:600'>{drought_msg}</div>")
+    # Pace table
+    delta = pace.get("apps_7d", 0) - pace.get("apps_prev_7d", 0)
+    delta_arrow = "↑" if delta > 0 else "↓" if delta < 0 else "→"
+    delta_color = "#1a7f37" if delta > 0 else "#b91c1c" if delta < 0 else "#666"
+    pace_html = (
+        f"<h3>⏱️ Application pace</h3>"
+        f"<table style='border-collapse:collapse;font-size:14px'>"
+        f"<tr><td style='padding:4px 12px;color:#666'>Last 24 hours</td>"
+        f"<td style='padding:4px 12px;font-weight:600'>{pace.get('apps_24h', 0)}</td></tr>"
+        f"<tr><td style='padding:4px 12px;color:#666'>This week</td>"
+        f"<td style='padding:4px 12px;font-weight:600'>{pace.get('apps_7d', 0)} "
+        f"<span style='color:{delta_color};font-size:12px'>({delta_arrow} {abs(delta)} vs last wk)</span></td></tr>"
+        f"<tr><td style='padding:4px 12px;color:#666'>Days since last app</td>"
+        f"<td style='padding:4px 12px;font-weight:600'>{pace.get('days_since_last', '?')}</td></tr>"
+        f"</table>"
+    )
+
     html = f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:0 auto;padding:20px;color:#24292f">
     <h2 style="margin-top:0">🌙 JCC morning brief</h2>
     <p style="color:#666;font-size:14px">{now_str}</p>
+    {drought_html}
     {ai_html}
+    {pace_html}
     <h3>📊 Overnight numbers</h3>
     <table style="border-collapse:collapse;font-size:14px">
       <tr><td style="padding:4px 12px;color:#666">Jobs crawled</td><td style="padding:4px 12px;font-weight:600">{stats['crawled_24h']:,}</td></tr>

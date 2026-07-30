@@ -162,10 +162,34 @@ Return ONLY a JSON object, no preface, no markdown fences:
                 except AttributeError:
                     continue
         parsed = _extract_json(raw)
-        if not parsed or "fit_score" not in parsed:
-            log.warning("job %d: no valid JSON in response (raw=%r)", job["id"], raw[:120])
-            return None
-        return {"parsed": parsed, "raw": raw}
+        if parsed and "fit_score" in parsed:
+            return {"parsed": parsed, "raw": raw}
+        # Retry once with more headroom + explicit "shorter JSON" ask —
+        # the failures are almost always mid-JSON truncation caused by
+        # Sonnet's extended-thinking preamble eating output tokens.
+        log.info("job %d: retrying with 1800 max_tokens", job["id"])
+        try:
+            resp = client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=1800,
+                messages=[{"role": "user", "content": prompt +
+                    "\n\nIMPORTANT: keep reasons under 6 words each and pitch_line under 30 words. Output JSON must be complete."}],
+            )
+            raw = ""
+            for block in resp.content:
+                if getattr(block, "type", None) == "text" or hasattr(block, "text"):
+                    try:
+                        raw = block.text.strip()
+                        break
+                    except AttributeError:
+                        continue
+            parsed = _extract_json(raw)
+            if parsed and "fit_score" in parsed:
+                return {"parsed": parsed, "raw": raw}
+        except Exception as e2:  # noqa: BLE001
+            log.warning("job %d: retry also failed: %s", job["id"], e2)
+        log.warning("job %d: no valid JSON after retry (raw=%r)", job["id"], raw[:120])
+        return None
     except Exception as e:  # noqa: BLE001
         log.warning("job %d: Claude call failed: %s", job["id"], e)
         return None

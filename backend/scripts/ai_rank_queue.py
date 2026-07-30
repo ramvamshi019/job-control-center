@@ -37,8 +37,13 @@ from app.utils.logging import get_logger  # noqa: E402
 
 log = get_logger("ai_rank_queue")
 
-BATCH_SIZE = int(os.environ.get("AI_RANK_BATCH", "40"))
+BATCH_SIZE = int(os.environ.get("AI_RANK_BATCH", "200"))
 DESC_TRUNC = 2400
+# Sponsor gate for ranking eligibility. Was 40 to keep the batch cheap when
+# BATCH_SIZE=40; with wider coverage, keeping it at 40 catches more but each
+# unranked job costs Claude tokens. Bumping to 50 halves the pool without
+# losing anything Ram would seriously consider (h1b<50 sponsors are noise).
+RANK_H1B_MIN = int(os.environ.get("AI_RANK_H1B_MIN", "50"))
 
 
 def _ensure_table() -> None:
@@ -83,13 +88,15 @@ def _ensure_table() -> None:
 
 
 def _pick_candidates() -> list[dict]:
-    """Yesterday's MISSED backlog only: jobs discovered 24-48h ago that
-    Ram never actioned (still 'New' or 'Need Review'). This is the pool
-    worth AI-ranking overnight — every-fresh-job would burn tokens on
-    posts Ram might still catch during the day."""
+    """All tech-relevant sponsor jobs in the last 24 HOURS that Ram hasn't
+    actioned yet AND haven't been ranked before. Each job is only ranked
+    once (WHERE r.job_id IS NULL), so night 1 pays the backfill cost
+    (~$3-4 for ~150 jobs) and every night after that only picks up jobs
+    newly entering the pool (~30-40/night, ~$1). Old design was
+    yesterday's 24-48h backlog only — which is why the Last 24h view
+    showed None on almost every row."""
     now = utcnow_naive()
     d24 = now - timedelta(hours=24)
-    d48 = now - timedelta(hours=48)
     with engine.connect() as c:
         c.execute(text("PRAGMA busy_timeout = 30000"))
         rows = c.execute(text("""
@@ -99,13 +106,13 @@ def _pick_candidates() -> list[dict]:
             FROM jobs j
             LEFT JOIN companies co ON co.id = j.company_id
             LEFT JOIN job_ai_ranking r ON r.job_id = j.id
-            WHERE j.discovered_at >= :d48 AND j.discovered_at < :d24
-              AND j.status IN ('New', 'Need Review')
-              AND COALESCE(co.h1b_history_score, 0) >= 40
+            WHERE j.discovered_at >= :d24
+              AND j.status IN ('New', 'Need Review', 'Approved')
+              AND COALESCE(co.h1b_history_score, 0) >= :h1b
               AND r.job_id IS NULL
             ORDER BY j.match_score DESC, j.discovered_at DESC
             LIMIT :n
-        """), {"d24": d24, "d48": d48, "n": BATCH_SIZE}).all()
+        """), {"d24": d24, "h1b": RANK_H1B_MIN, "n": BATCH_SIZE}).all()
         return [dict(r._mapping) for r in rows]
 
 

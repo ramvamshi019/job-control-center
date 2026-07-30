@@ -45,6 +45,7 @@ HN_HIRING_EVERY     = int(os.environ.get("DISC_HN_HIRING_EVERY_S",   60 * 60 * 6
 YC_EVERY            = int(os.environ.get("DISC_YC_EVERY_S",          60 * 60 * 24))  # 24 hrs
 HARVEST_EVERY       = int(os.environ.get("DISC_HARVEST_EVERY_S",     60 * 60 * 24 * 7))  # 7 days
 GMAIL_EVERY         = int(os.environ.get("DISC_GMAIL_EVERY_S",       60 * 15))       # 15 min
+NOTIFY_EVERY        = int(os.environ.get("DISC_NOTIFY_EVERY_S",      60 * 15))       # 15 min -- email digest of top new sponsor jobs
 
 # Sleep between the *loop's outer tick*. Short enough that per-source cadences
 # are honored to within ~1 min. Doesn't drive API load -- source functions
@@ -66,8 +67,8 @@ def _safe_run(name: str, fn):
 
 def main() -> int:
     log.info(
-        "discovery loop starting. cadences: job_stories=%ds hn_hiring=%ds yc=%ds harvest=%ds gmail=%ds",
-        JOB_STORIES_EVERY, HN_HIRING_EVERY, YC_EVERY, HARVEST_EVERY, GMAIL_EVERY,
+        "discovery loop starting. cadences: job_stories=%ds hn_hiring=%ds yc=%ds harvest=%ds gmail=%ds notify=%ds",
+        JOB_STORIES_EVERY, HN_HIRING_EVERY, YC_EVERY, HARVEST_EVERY, GMAIL_EVERY, NOTIFY_EVERY,
     )
 
     # Per-source "next-run" timestamps. Start EVERY source at now so the first
@@ -80,6 +81,7 @@ def main() -> int:
         "yc":          now,
         "harvest":     now,
         "gmail":       now,
+        "notify":      now + 60,  # slight delay so first tick doesn't fire on stale DB
     }
 
     def _due(key: str) -> bool:
@@ -111,6 +113,11 @@ def main() -> int:
             _safe_run("Gmail watcher", _gmail_watch)
             next_run["gmail"] = time.time() + GMAIL_EVERY
 
+        # 6. Email digest of new top-score sponsor jobs (via same SMTP creds)
+        if _due("notify"):
+            _safe_run("Notify digest", _notify_watch)
+            next_run["notify"] = time.time() + NOTIFY_EVERY
+
         time.sleep(TICK_S)
 
 
@@ -137,6 +144,13 @@ def _gmail_watch():
     """Poll Gmail for recruiter responses on applied jobs. No-op if the user
     hasn't set up Gmail credentials yet (returns {'configured': False})."""
     from gmail_watcher import run
+    return run()
+
+
+def _notify_watch():
+    """Email digest of new top-score sponsor jobs to the user's own inbox
+    via SMTP. Reuses the Gmail App Password. No-op if Gmail not configured."""
+    from notify_watcher import run
     return run()
 
 

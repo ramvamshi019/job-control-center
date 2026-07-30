@@ -1935,6 +1935,18 @@ elif page == "🚀 AI-Ranked Queue":
                         for k in kw
                     )
                     st.markdown(f"<div style='margin:6px 0'>🔑 {tags}</div>", unsafe_allow_html=True)
+                dm = (i.get("referral_dm") or "").strip()
+                if dm:
+                    with st.expander("💬 LinkedIn DM (copy-paste ready)"):
+                        st.text_area(
+                            "Message", value=dm, height=110,
+                            key=f"dm_{i['id']}", label_visibility="collapsed",
+                        )
+                        st.caption(
+                            "Paste into a LinkedIn message to a recruiter / "
+                            "hiring manager at this company. Sonnet-drafted, "
+                            "tailored to this JD."
+                        )
                 reasons = i.get("reasons") or []
                 red_flags = i.get("red_flags") or []
                 if reasons or red_flags:

@@ -61,7 +61,11 @@ def _ensure_table() -> None:
         try:
             c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN keywords TEXT"))
         except Exception:
-            pass  # already exists
+            pass
+        try:
+            c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN referral_dm TEXT"))
+        except Exception:
+            pass
 
 
 def _pick_candidates() -> list[dict]:
@@ -132,15 +136,15 @@ Return ONLY a JSON object, no preface, no markdown fences:
   "reasons": ["<3-8 word reason>", "<reason>", "<reason>"],
   "red_flags": ["<red flag or empty>"],
   "pitch_line": "<one sentence Ram can paste into a cover letter, first-person, specific to this JD, 25-35 words>",
-  "keywords": ["<top 5 skills/tools/keywords the JD emphasizes, e.g. 'Airflow', 'dbt', 'AWS Glue'>"]
+  "keywords": ["<top 5 skills/tools/keywords the JD emphasizes, e.g. 'Airflow', 'dbt', 'AWS Glue'>"],
+  "referral_dm": "<3-sentence LinkedIn DM Ram can paste to a hiring manager or recruiter at {job['company_name']}. First sentence: warm opener ('Saw the {job['title']} opening'). Second: 1-2 concrete fit points from Ram's stack. Third: ask (would love a 15-min chat / could you refer me / any advice on landing this). No emojis. No 'Dear'. 45-60 words total.>"
 }}"""
     try:
         resp = client.messages.create(
             model=settings.anthropic_model,
-            # 400 truncated ~25% of responses mid-JSON on first run. 800 gives
-            # headroom for 3 reasons + red flags + 35-word pitch line even
-            # with sonnet's thinking-token preamble.
-            max_tokens=800,
+            # Was 800 pre-DM; +referral_dm needs more headroom. 1200 gives
+            # enough slack for Sonnet's thinking preamble + long titles.
+            max_tokens=1200,
             messages=[{"role": "user", "content": prompt}],
         )
         # Sonnet-5 with thinking: iterate to first block with .text
@@ -167,15 +171,17 @@ def _store(job_id: int, result: dict) -> None:
     with engine.begin() as c:
         c.execute(text("""
             INSERT INTO job_ai_ranking
-                (job_id, fit_score, reasons, red_flags, pitch_line, keywords, raw_json, generated_at)
+                (job_id, fit_score, reasons, red_flags, pitch_line, keywords,
+                 referral_dm, raw_json, generated_at)
             VALUES
-                (:jid, :fs, :rs, :rf, :pl, :kw, :rj, :ts)
+                (:jid, :fs, :rs, :rf, :pl, :kw, :dm, :rj, :ts)
             ON CONFLICT(job_id) DO UPDATE SET
                 fit_score = excluded.fit_score,
                 reasons = excluded.reasons,
                 red_flags = excluded.red_flags,
                 pitch_line = excluded.pitch_line,
                 keywords = excluded.keywords,
+                referral_dm = excluded.referral_dm,
                 raw_json = excluded.raw_json,
                 generated_at = excluded.generated_at
         """), {
@@ -185,6 +191,7 @@ def _store(job_id: int, result: dict) -> None:
             "rf": json.dumps(p.get("red_flags") or []),
             "pl": (p.get("pitch_line") or "").strip(),
             "kw": json.dumps(p.get("keywords") or []),
+            "dm": (p.get("referral_dm") or "").strip(),
             "rj": result["raw"],
             "ts": utcnow_naive(),
         })

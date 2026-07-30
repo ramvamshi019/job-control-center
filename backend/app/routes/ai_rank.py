@@ -39,7 +39,7 @@ def queue(limit: int = 40, min_fit: int = 0):
                    j.match_score, j.status, j.discovered_at,
                    COALESCE(co.h1b_history_score, 0) AS h1b_score,
                    r.fit_score, r.reasons, r.red_flags, r.pitch_line,
-                   r.keywords, r.generated_at
+                   r.keywords, r.referral_dm, r.generated_at
             FROM job_ai_ranking r
             JOIN jobs j ON j.id = r.job_id
             LEFT JOIN companies co ON co.id = j.company_id

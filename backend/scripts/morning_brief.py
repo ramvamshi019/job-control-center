@@ -167,28 +167,56 @@ def _stats_last_24h() -> dict:
         except Exception:
             total_waiting = 0
 
-        # Filter sanity check: last night's sample of rejected jobs Claude
-        # thinks should have been kept (false-negatives). Table populated
-        # by filter_sanity_check.py at 05:15 UTC.
+        # Filter sanity: two-sided sampling (populated by filter_sanity_check.py
+        # at 05:15 UTC). Rejected-pool 'keep' = false-negative; accepted-pool
+        # 'reject' = false-positive.
+        fs_since = now - timedelta(hours=6)
         try:
-            fs_since = now - timedelta(hours=6)  # only THIS morning's sample
-            keep_rows = c.execute(text("""
+            # False-negatives: jobs the filter rejected that Claude wanted kept
+            fn_rows = c.execute(text("""
                 SELECT s.job_id, s.reason, j.title, j.company_name, j.job_url
                 FROM filter_sanity_check s
                 JOIN jobs j ON j.id = s.job_id
-                WHERE s.verdict = 'keep' AND s.sampled_at >= :d
-                ORDER BY s.sampled_at DESC
-                LIMIT 5
+                WHERE s.sampled_at >= :d
+                  AND s.source_pool = 'rejected' AND s.verdict = 'keep'
+                ORDER BY s.sampled_at DESC LIMIT 5
             """), {"d": fs_since}).all()
-            fs_total = c.execute(text(
-                "SELECT COUNT(*) FROM filter_sanity_check WHERE sampled_at >= :d"
+            fn_total = c.execute(text(
+                "SELECT COUNT(*) FROM filter_sanity_check "
+                "WHERE sampled_at >= :d AND source_pool = 'rejected'"
             ), {"d": fs_since}).scalar() or 0
-            fs_keep = c.execute(text(
-                "SELECT COUNT(*) FROM filter_sanity_check WHERE sampled_at >= :d AND verdict = 'keep'"
+            fn_keep = c.execute(text(
+                "SELECT COUNT(*) FROM filter_sanity_check "
+                "WHERE sampled_at >= :d AND source_pool = 'rejected' AND verdict = 'keep'"
             ), {"d": fs_since}).scalar() or 0
-            false_neg_rate = round(100 * fs_keep / fs_total, 1) if fs_total else 0
+            false_neg_rate = round(100 * fn_keep / fn_total, 1) if fn_total else 0
+
+            # False-positives: jobs the filter kept that Claude would toss
+            fp_rows = c.execute(text("""
+                SELECT s.job_id, s.reason, j.title, j.company_name, j.job_url
+                FROM filter_sanity_check s
+                JOIN jobs j ON j.id = s.job_id
+                WHERE s.sampled_at >= :d
+                  AND s.source_pool = 'accepted' AND s.verdict = 'reject'
+                ORDER BY s.sampled_at DESC LIMIT 5
+            """), {"d": fs_since}).all()
+            fp_total = c.execute(text(
+                "SELECT COUNT(*) FROM filter_sanity_check "
+                "WHERE sampled_at >= :d AND source_pool = 'accepted'"
+            ), {"d": fs_since}).scalar() or 0
+            fp_rej = c.execute(text(
+                "SELECT COUNT(*) FROM filter_sanity_check "
+                "WHERE sampled_at >= :d AND source_pool = 'accepted' AND verdict = 'reject'"
+            ), {"d": fs_since}).scalar() or 0
+            false_pos_rate = round(100 * fp_rej / fp_total, 1) if fp_total else 0
         except Exception:
-            keep_rows, fs_total, fs_keep, false_neg_rate = [], 0, 0, 0
+            fn_rows, fp_rows = [], []
+            fn_total = fn_keep = fp_total = fp_rej = 0
+            false_neg_rate = false_pos_rate = 0
+        # legacy alias so downstream code doesn't break
+        keep_rows = fn_rows
+        fs_total = fn_total
+        fs_keep = fn_keep
 
         # Application pace: apps today, this week, 7-day rolling avg, days since last app.
         # 'Applied' status flip is our proxy — updated_at is when it flipped.
@@ -233,6 +261,10 @@ def _stats_last_24h() -> dict:
             "sampled": fs_total,
             "keep_count": fs_keep,
             "false_neg_rate": false_neg_rate,
+            "fp_rows": [dict(r._mapping) for r in fp_rows],
+            "fp_sampled": fp_total,
+            "fp_count": fp_rej,
+            "false_pos_rate": false_pos_rate,
         },
         "pace": {
             "apps_24h": apps_24h,
@@ -426,14 +458,25 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
 
     fs = stats.get("filter_sanity") or {}
     fs_html = ""
-    if fs.get("sampled"):
-        rate = fs["false_neg_rate"]
-        rate_color = "#1a7f37" if rate < 5 else "#9a6700" if rate < 15 else "#b91c1c"
-        header = (f"<h3>📊 Filter sanity check "
-                  f"<span style='color:{rate_color};font-weight:600'>"
-                  f"({fs['keep_count']}/{fs['sampled']} false-negatives, {rate}%)</span></h3>")
+    if fs.get("sampled") or fs.get("fp_sampled"):
+        fn_rate = fs.get("false_neg_rate", 0)
+        fp_rate = fs.get("false_pos_rate", 0)
+        fn_color = "#1a7f37" if fn_rate < 5 else "#9a6700" if fn_rate < 15 else "#b91c1c"
+        fp_color = "#1a7f37" if fp_rate < 15 else "#9a6700" if fp_rate < 30 else "#b91c1c"
+        header = (
+            f"<h3>📊 Filter sanity check</h3>"
+            f"<table style='border-collapse:collapse;font-size:14px;margin-bottom:10px'>"
+            f"<tr><td style='padding:4px 12px;color:#666'>False-negatives (rejects that should stay)</td>"
+            f"<td style='padding:4px 12px;font-weight:600;color:{fn_color}'>"
+            f"{fs.get('keep_count',0)}/{fs.get('sampled',0)} ({fn_rate}%)</td></tr>"
+            f"<tr><td style='padding:4px 12px;color:#666'>False-positives (accepts that should go)</td>"
+            f"<td style='padding:4px 12px;font-weight:600;color:{fp_color}'>"
+            f"{fs.get('fp_count',0)}/{fs.get('fp_sampled',0)} ({fp_rate}%)</td></tr>"
+            f"</table>"
+        )
+        body = ""
         if fs.get("keep_rows"):
-            body = "<p style='color:#666;font-size:13px'>Claude sampled rejected jobs and flagged these as ones you'd probably want to see:</p>"
+            body += "<p style='color:#666;font-size:13px;margin-top:8px'>🟡 Should-have-kept (loosen filters?):</p>"
             body += "".join(
                 f"<div style='border-left:3px solid #9a6700;padding:8px 12px;margin:6px 0;"
                 f"background:#fffbeb;font-size:14px'>"
@@ -442,8 +485,18 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
                 f"<a href='{r['job_url']}'>Open job →</a></div>"
                 for r in fs["keep_rows"]
             )
-        else:
-            body = "<p style='color:#1a7f37;font-size:14px'>✅ Filter looks tight — Claude agreed with every reject in tonight's sample.</p>"
+        if fs.get("fp_rows"):
+            body += "<p style='color:#666;font-size:13px;margin-top:8px'>🔴 Should-have-tossed (tighten filters?):</p>"
+            body += "".join(
+                f"<div style='border-left:3px solid #b91c1c;padding:8px 12px;margin:6px 0;"
+                f"background:#fef2f2;font-size:14px'>"
+                f"<b>{r['title']}</b> @ {r['company_name']}<br>"
+                f"<span style='color:#666;font-style:italic'>{r['reason']}</span><br>"
+                f"<a href='{r['job_url']}'>Open job →</a></div>"
+                for r in fs["fp_rows"]
+            )
+        if not body:
+            body = "<p style='color:#1a7f37;font-size:14px'>✅ Filter is well-calibrated — Claude agreed with every verdict this morning.</p>"
         fs_html = header + body
     # Drought banner
     drought_html = ""

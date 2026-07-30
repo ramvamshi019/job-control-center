@@ -48,25 +48,34 @@ def _ensure_table() -> None:
                 FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
             )
         """))
+        # Additive: which side of the filter this row came from. Nullable
+        # for legacy rows, backfilled to 'rejected_pool' on next run.
+        try:
+            c.execute(text("ALTER TABLE filter_sanity_check ADD COLUMN source_pool TEXT"))
+        except Exception:
+            pass
 
 
-def _sample_rejected() -> list[dict]:
+def _sample(status_in: list[str], n: int) -> list[dict]:
+    """Random sample of jobs discovered in the last 24h with status in
+    the given list. Uses ORDER BY RANDOM() LIMIT n — bounded by 24h window
+    so we're always testing the CURRENT filter behavior."""
     d24 = utcnow_naive() - timedelta(hours=24)
+    placeholders = ",".join(f":s{i}" for i in range(len(status_in)))
+    params = {f"s{i}": s for i, s in enumerate(status_in)}
+    params.update({"d": d24, "n": n})
     with engine.connect() as c:
         c.execute(text("PRAGMA busy_timeout = 30000"))
-        # random() cheap here — LIMIT keeps SQLite from sorting all 753k rows,
-        # but let's cap the candidate pool to last 24h so we're testing the
-        # CURRENT filter behavior, not a stale one.
-        rows = c.execute(text("""
+        rows = c.execute(text(f"""
             SELECT j.id, j.title, j.company_name, j.location,
-                   j.description, j.rejection_reason,
+                   j.description, j.rejection_reason, j.status AS current_status,
                    COALESCE(co.h1b_history_score, 0) AS h1b_score
             FROM jobs j
             LEFT JOIN companies co ON co.id = j.company_id
-            WHERE j.status = 'Rejected' AND j.discovered_at >= :d
+            WHERE j.status IN ({placeholders}) AND j.discovered_at >= :d
             ORDER BY RANDOM()
             LIMIT :n
-        """), {"d": d24, "n": SAMPLE_SIZE}).all()
+        """), params).all()
         return [dict(r._mapping) for r in rows]
 
 
@@ -87,22 +96,36 @@ def _extract_json(s: str) -> dict | None:
         return None
 
 
-def _judge_one(client, job: dict) -> dict | None:
+def _judge_one(client, job: dict, pool: str) -> dict | None:
     desc = (job.get("description") or "")[:1800]
+    if pool == "rejected":
+        framing = (
+            "Ram's filter REJECTED this job. Should it have?\n"
+            f"- Filter's reason for reject: {job.get('rejection_reason') or 'unknown'}\n"
+        )
+        bias = ("Bias: default to \"reject\" unless the job clearly fits Ram's "
+                "profile (role + skills + US-based + not obviously senior/exec/leadership).")
+    else:  # accepted pool
+        framing = (
+            f"Ram's filter ACCEPTED this job (current status: {job.get('current_status')}). Should it have?\n"
+            "Red flags to watch for: senior/staff/director/manager titles, "
+            "non-US location that slipped through, wrong domain (frontend/mobile), "
+            "on-site only in Ram-hostile city.\n"
+        )
+        bias = ("Bias: default to \"keep\" unless there's a clear mismatch. "
+                "Only flag as \"reject\" if you'd tell Ram this is a waste of his click.")
     prompt = f"""You're the second-opinion reviewer for Ram's job filter.
-Ram's filter REJECTED this job. Should it have?
-
+{framing}
 Ram's profile:
 - Skills: {settings.my_skills}
 - Target roles: {settings.my_target_roles}
 - Work auth: {settings.my_work_auth}
 - Location: US-only, remote or on-site
 
-Job that got rejected:
+Job under review:
 - Title: {job['title']}
 - Company: {job['company_name']} (H-1B score {job['h1b_score']}/100)
 - Location: {job['location']}
-- Filter's reason for reject: {job.get('rejection_reason') or 'unknown'}
 - Description (truncated): {desc}
 
 Return ONLY a JSON object, no markdown fences, no preface:
@@ -111,8 +134,7 @@ Return ONLY a JSON object, no markdown fences, no preface:
   "reason": "<one sentence, 15 words max, why keep-worthy or correctly-rejected>"
 }}
 
-Bias: default to "reject" unless the job clearly fits Ram's profile
-(role + skills + US-based + not obviously senior/exec/leadership).
+{bias}
 """
     try:
         resp = client.messages.create(
@@ -137,20 +159,22 @@ Bias: default to "reject" unless the job clearly fits Ram's profile
         return None
 
 
-def _store(job_id: int, verdict: dict) -> None:
+def _store(job_id: int, verdict: dict, pool: str) -> None:
     with engine.begin() as c:
         c.execute(text("""
-            INSERT INTO filter_sanity_check (job_id, verdict, reason, sampled_at)
-            VALUES (:jid, :v, :r, :ts)
+            INSERT INTO filter_sanity_check (job_id, verdict, reason, sampled_at, source_pool)
+            VALUES (:jid, :v, :r, :ts, :p)
             ON CONFLICT(job_id) DO UPDATE SET
                 verdict = excluded.verdict,
                 reason = excluded.reason,
-                sampled_at = excluded.sampled_at
+                sampled_at = excluded.sampled_at,
+                source_pool = excluded.source_pool
         """), {
             "jid": job_id,
             "v": (verdict.get("verdict") or "").strip().lower(),
             "r": (verdict.get("reason") or "").strip(),
             "ts": utcnow_naive(),
+            "p": pool,
         })
 
 
@@ -160,30 +184,39 @@ def run() -> dict:
         return {"sampled": 0}
 
     _ensure_table()
-    sample = _sample_rejected()
-    log.info("filter_sanity: sampling %d rejected jobs", len(sample))
-    if not sample:
-        return {"sampled": 0}
 
     import anthropic
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    keep = reject = failed = 0
-    for j in sample:
-        v = _judge_one(client, j)
-        if not v:
-            failed += 1
-            continue
-        _store(j["id"], v)
-        if v.get("verdict") == "keep":
-            keep += 1
-        else:
-            reject += 1
-    total = keep + reject
-    rate = round(100 * keep / total, 1) if total else 0
-    log.info("filter_sanity: keep=%d reject=%d failed=%d false_neg_rate=%.1f%%",
-             keep, reject, failed, rate)
-    return {"keep": keep, "reject": reject, "failed": failed, "false_neg_rate": rate}
+    def _run_pool(status_in: list[str], pool: str, n: int) -> dict:
+        sample = _sample(status_in, n)
+        keep = reject = failed = 0
+        for j in sample:
+            v = _judge_one(client, j, pool)
+            if not v:
+                failed += 1
+                continue
+            _store(j["id"], v, pool)
+            if v.get("verdict") == "keep":
+                keep += 1
+            else:
+                reject += 1
+        return {"keep": keep, "reject": reject, "failed": failed, "n": len(sample)}
+
+    # Rejected pool -> false-negatives (Claude says 'keep' means filter missed a good one)
+    rej = _run_pool(["Rejected"], "rejected", SAMPLE_SIZE)
+    # Accepted pool -> false-positives (Claude says 'reject' means filter let a bad one through)
+    acc = _run_pool(["New", "Need Review"], "accepted", 15)
+
+    false_neg = round(100 * rej["keep"] / max(rej["keep"] + rej["reject"], 1), 1)
+    false_pos = round(100 * acc["reject"] / max(acc["keep"] + acc["reject"], 1), 1)
+    log.info("filter_sanity: rejected pool keep=%d reject=%d fn=%.1f%% | accepted pool keep=%d reject=%d fp=%.1f%%",
+             rej["keep"], rej["reject"], false_neg,
+             acc["keep"], acc["reject"], false_pos)
+    return {
+        "rejected": rej, "accepted": acc,
+        "false_neg_rate": false_neg, "false_pos_rate": false_pos,
+    }
 
 
 if __name__ == "__main__":

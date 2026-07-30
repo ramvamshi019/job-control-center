@@ -266,9 +266,14 @@ def score(job: Job, company: Optional[Company] = None) -> Tuple[int, str]:
         total -= 50
         reasons.append("-50 clearance/citizenship language")
 
+    # 2026-07-30: Ram is on F-1 OPT (STEM 3yr extension pending), so
+    # "no sponsorship" jobs are still applyable — OPT gives him ~3 years
+    # of US work auth without needing H-1B. Was -50 (effectively excluding
+    # them from Best Matches / New) → now a soft -10 nudge so H-1B sponsors
+    # still edge them out but OPT-fine jobs stay visible.
     if _contains_any(desc, NO_SPONSOR_SIGNALS):
-        total -= 50
-        reasons.append("-50 no-sponsorship language")
+        total -= 10
+        reasons.append("-10 no-sponsorship language (OPT-fine short-term)")
 
     if _contains_any(etype + " " + desc, CONTRACT_SIGNALS):
         total -= 25

@@ -229,7 +229,10 @@ Ram's profile:
 - 2 years experience (J&J internship + coursework)
 - Skills: {settings.my_skills}
 - Target roles: {settings.my_target_roles}
-- Work auth: {settings.my_work_auth}
+- Work auth: {settings.my_work_auth} — CRITICAL: OPT gives him 3 years of
+  US work authorization WITHOUT sponsorship needed. Roles that say "no
+  sponsorship" or "must be authorized without sponsorship" are STILL
+  applyable during OPT. Do NOT flag no-sponsorship as a blocker.
 - Public: 3 GitHub projects (JobJarvis, Ecommerce-ML, this JCC crawler). NO merged PRs to major OSS ML libraries.
 - Location: US-based
 
@@ -242,11 +245,11 @@ Job to reality-check:
 Ignore skill overlap. Judge ONLY: will Ram clear this employer's ACTUAL filter? Look for structural blockers:
 - Does the JD explicitly require OSS contributions / GitHub track record he doesn't have?
 - Does the title imply seniority (II/III/Senior/Staff/Lead/Principal/Manager) beyond 2y?
-- Clearance / citizenship / green-card wall?
+- Clearance / US citizenship / green-card wall (these ARE hard blockers)?
 - In-person only in NYC/SF/Bay Area/Seattle with high cost-of-living?
 - Domain specialty that requires prior work in that domain (iOS, embedded, network, game, security)?
 - Contract / C2C / 1099 / staffing agency repost?
-- Explicit no-sponsor / no-visa language?
+- Do NOT flag "no sponsorship" — Ram can work on OPT without it. Only flag if the JD requires citizenship or clearance.
 
 Return ONLY a JSON object, no preface, no markdown:
 {{

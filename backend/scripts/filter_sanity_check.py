@@ -119,7 +119,9 @@ def _judge_one(client, job: dict, pool: str) -> dict | None:
 Ram's profile:
 - Skills: {settings.my_skills}
 - Target roles: {settings.my_target_roles}
-- Work auth: {settings.my_work_auth}
+- Work auth: {settings.my_work_auth} — CRITICAL: OPT gives him ~3 years of US
+  work auth WITHOUT sponsorship. "No sponsorship" jobs are STILL applyable
+  during that window. Do NOT reject a job solely for no-sponsor language.
 - Location: US-only, remote or on-site
 
 Job under review:

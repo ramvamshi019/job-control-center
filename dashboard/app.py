@@ -1819,7 +1819,9 @@ elif page == "🗓️ Date Browser":
     )
     hide_clearance = c3.checkbox("Hide clearance/citizenship walls", value=True,
                                  help="Drops jobs mentioning 'US citizen', 'TS/SCI', "
-                                      "'security clearance', 'green card required'.")
+                                      "'security clearance', 'green card required'. "
+                                      "No-sponsorship jobs are NOT hidden — OPT gives "
+                                      "3yr work auth so those are still applyable.")
     sort_by = c4.selectbox(
         "Sort by",
         ["🚦 clear (reality) desc", "🚀 AI fit desc", "score desc", "newest first"],
@@ -1863,10 +1865,11 @@ elif page == "🗓️ Date Browser":
 
     # Citizenship / clearance filter — grep the description
     if hide_clearance:
+        # Only hardcoded WALLS — citizenship / clearance. NOT "no sponsorship" —
+        # OPT gives Ram 3 yrs of work auth so those jobs are still applyable.
         pat = re.compile(
             r"(us\s+citizen|citizenship required|ts/sci|top secret|"
-            r"security clearance|active clearance|green\s+card required|"
-            r"must be authorized without sponsorship)",
+            r"security clearance|active clearance|green\s+card required)",
             re.IGNORECASE,
         )
         data = [j for j in data if not pat.search(

@@ -98,7 +98,7 @@ def _stats_last_24h() -> dict:
         try:
             ai_top = c.execute(text("""
                 SELECT j.id, j.title, j.company_name, j.location, j.job_url,
-                       j.match_score, r.fit_score, r.reasons, r.pitch_line
+                       j.match_score, r.fit_score, r.reasons, r.pitch_line, r.keywords
                 FROM job_ai_ranking r
                 JOIN jobs j ON j.id = r.job_id
                 WHERE j.discovered_at >= :d48 AND j.discovered_at < :d24
@@ -376,12 +376,26 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             buzz += (f"<div style='margin-top:4px;font-size:12px;color:#666'>"
                      f"🗣️ HN: <a href='{m['url']}' style='color:#0969da'>{m['title']}</a> "
                      f"<span style='color:#999'>({m.get('points',0)}pt)</span></div>")
+        kw_html = ""
+        kw_raw = j.get("keywords")
+        try:
+            import json as _j
+            kws = _j.loads(kw_raw) if isinstance(kw_raw, str) else (kw_raw or [])
+        except (ValueError, TypeError):
+            kws = []
+        if kws:
+            tags = "".join(
+                f"<span style='display:inline-block;background:#eef2ff;color:#3730a3;"
+                f"padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;"
+                f"margin:2px 3px 0 0'>{k}</span>" for k in kws[:5]
+            )
+            kw_html = f"<div style='margin-top:4px'>🔑 {tags}</div>"
         return (
             f"<tr><td style='padding:8px 10px;background:{badge_bg};color:#fff;"
             f"font-weight:700;border-radius:4px;vertical-align:top'>{score}</td>"
             f"<td style='padding:8px 12px'><b>{j['title']}</b><br>"
             f"<span style='color:#666'>{j['company_name']} · {j['location']}</span><br>"
-            f"<a href='{j['job_url']}'>Apply →</a>{pitch}{buzz}</td></tr>"
+            f"<a href='{j['job_url']}'>Apply →</a>{pitch}{kw_html}{buzz}</td></tr>"
         )
     top_html = "".join(_row(j) for j in stats["top_jobs"])
     top_heading = ("🚀 Top 5 AI-ranked apply queue"

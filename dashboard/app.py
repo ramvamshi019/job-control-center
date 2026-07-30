@@ -1926,6 +1926,15 @@ elif page == "🚀 AI-Ranked Queue":
                         f"margin:8px 0;background:#f0f7ff;color:#111;font-style:italic'>"
                         f"&ldquo;{i['pitch_line']}&rdquo;</blockquote>",
                         unsafe_allow_html=True)
+                kw = i.get("keywords") or []
+                if kw:
+                    tags = "".join(
+                        f"<span style='display:inline-block;background:#eef2ff;color:#3730a3;"
+                        f"padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;"
+                        f"margin:2px 4px 2px 0'>{k}</span>"
+                        for k in kw
+                    )
+                    st.markdown(f"<div style='margin:6px 0'>🔑 {tags}</div>", unsafe_allow_html=True)
                 reasons = i.get("reasons") or []
                 red_flags = i.get("red_flags") or []
                 if reasons or red_flags:

@@ -56,6 +56,12 @@ def _ensure_table() -> None:
             )
         """))
         c.execute(text("CREATE INDEX IF NOT EXISTS idx_jar_score ON job_ai_ranking(fit_score DESC)"))
+        # Additive migration: keywords column (nullable, no default) — safe on
+        # existing rows, they just show as null until re-ranked.
+        try:
+            c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN keywords TEXT"))
+        except Exception:
+            pass  # already exists
 
 
 def _pick_candidates() -> list[dict]:
@@ -125,7 +131,8 @@ Return ONLY a JSON object, no preface, no markdown fences:
   "fit_score": <int 0-100, honest fit for Ram given skills + role + sponsorship>,
   "reasons": ["<3-8 word reason>", "<reason>", "<reason>"],
   "red_flags": ["<red flag or empty>"],
-  "pitch_line": "<one sentence Ram can paste into a cover letter, first-person, specific to this JD, 25-35 words>"
+  "pitch_line": "<one sentence Ram can paste into a cover letter, first-person, specific to this JD, 25-35 words>",
+  "keywords": ["<top 5 skills/tools/keywords the JD emphasizes, e.g. 'Airflow', 'dbt', 'AWS Glue'>"]
 }}"""
     try:
         resp = client.messages.create(
@@ -160,14 +167,15 @@ def _store(job_id: int, result: dict) -> None:
     with engine.begin() as c:
         c.execute(text("""
             INSERT INTO job_ai_ranking
-                (job_id, fit_score, reasons, red_flags, pitch_line, raw_json, generated_at)
+                (job_id, fit_score, reasons, red_flags, pitch_line, keywords, raw_json, generated_at)
             VALUES
-                (:jid, :fs, :rs, :rf, :pl, :rj, :ts)
+                (:jid, :fs, :rs, :rf, :pl, :kw, :rj, :ts)
             ON CONFLICT(job_id) DO UPDATE SET
                 fit_score = excluded.fit_score,
                 reasons = excluded.reasons,
                 red_flags = excluded.red_flags,
                 pitch_line = excluded.pitch_line,
+                keywords = excluded.keywords,
                 raw_json = excluded.raw_json,
                 generated_at = excluded.generated_at
         """), {
@@ -176,6 +184,7 @@ def _store(job_id: int, result: dict) -> None:
             "rs": json.dumps(p.get("reasons") or []),
             "rf": json.dumps(p.get("red_flags") or []),
             "pl": (p.get("pitch_line") or "").strip(),
+            "kw": json.dumps(p.get("keywords") or []),
             "rj": result["raw"],
             "ts": utcnow_naive(),
         })

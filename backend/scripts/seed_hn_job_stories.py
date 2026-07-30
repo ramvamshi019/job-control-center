@@ -73,8 +73,9 @@ def run() -> dict:
         return {"fetched": 0, "new": 0}
 
     def _fetch(iid):
+        # Only catch expected network/decode failures. Ctrl-C / OOM propagate.
         try: return HN.get(f"https://hacker-news.firebaseio.com/v0/item/{iid}.json", timeout=8).json()
-        except Exception: return None
+        except (requests.RequestException, ValueError): return None
 
     items = []
     with ThreadPoolExecutor(max_workers=8) as ex:

@@ -88,9 +88,14 @@ def _fetch_comment_ids(thread_ids: Iterable[int]) -> list[int]:
 
 
 def _fetch_item(kid: int) -> dict | None:
+    """Fetch one HN comment. Returns None on any expected network / decode
+    failure so callers can drop the row silently; deliberately does NOT
+    catch KeyboardInterrupt or MemoryError so the process still exits
+    cleanly when the user hits Ctrl-C or the OOM killer starts firing."""
     try:
         return HN.get(f"https://hacker-news.firebaseio.com/v0/item/{kid}.json", timeout=8).json()
-    except Exception:  # noqa: BLE001
+    except (requests.RequestException, ValueError):
+        # RequestException = timeout / connection / HTTP; ValueError = bad JSON
         return None
 
 

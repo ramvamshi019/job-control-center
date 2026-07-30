@@ -60,7 +60,9 @@ def _probe(name: str, website: str) -> dict | None:
     dict on success or None on any failure (dead site, no ATS detected, etc.)."""
     try:
         resp = SESSION.get(website, timeout=CHECK_TIMEOUT, allow_redirects=True)
-    except Exception:  # noqa: BLE001
+    except (requests.RequestException, UnicodeError):
+        # Network / SSL / redirect loop / bad TLS hostname -- all fine to drop.
+        # Deliberately NOT catching KeyboardInterrupt / MemoryError.
         return None
     if resp.status_code >= 400 or len(resp.text) < 400:
         return None

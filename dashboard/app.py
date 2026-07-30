@@ -327,33 +327,60 @@ def _ai_column_config() -> dict:
 def handle_grid_edits(edited, status_by_id: dict) -> bool:
     """Reconcile the checkboxes in a data_editor result against the DB.
 
-    Every discovery grid used to have its own copy of this loop -- Posted
-    Today, Best Matches, Last 24 Hours, Posted This Week, Live Feed, Entry
-    Level. One helper replaces 5 near-identical copies (~30 LOC each).
+    Bulk-processing: iterates ALL rows in one pass so ticking 20 dismiss
+    boxes at once fires 20 UPDATEs then one st.rerun(). Old behavior was
+    'return True on first change' which meant one-at-a-time: tick, rerun,
+    tick, rerun. Fine for the odd apply, terrible for cleanup passes.
 
-    Semantics:
-      - `dismiss=True`  -> status set to Archived (drops from all discovery views)
-      - `applied=True`  when current != Applied  -> set to Applied
-      - `applied=False` when current == Applied  -> revert to New (undo apply)
+    Semantics per row:
+      - `dismiss=True`  -> status set to Archived (wins over apply)
+      - `applied=True`  when current != Applied  -> Applied
+      - `applied=False` when current == Applied  -> revert to New
 
-    Returns True on the first change so the caller can `st.rerun()` and
-    re-fetch the grid with the new state visible.
+    Returns True if ANY change was made — caller reruns once at the end.
+    Shows a progress spinner for >3 pending changes so bulk deletes have
+    a visible loading state instead of appearing to hang.
     """
+    # First pass: count pending changes so we know whether to show a spinner
+    pending = 0
     for jid, r in edited.iterrows():
-        cur = status_by_id.get(jid)
-        # Dismiss wins over apply -- if both are set, the user is dumping the row.
         if "dismiss" in r and bool(r.get("dismiss")):
-            set_status(int(jid), "Archived")
-            return True
-        if "applied" in r:
+            pending += 1
+        elif "applied" in r:
             want = bool(r.get("applied"))
-            if want and cur != "Applied":
-                set_status(int(jid), "Applied")
-                return True
-            if not want and cur == "Applied":
-                set_status(int(jid), "New")
-                return True
-    return False
+            cur = status_by_id.get(jid)
+            if (want and cur != "Applied") or (not want and cur == "Applied"):
+                pending += 1
+    if pending == 0:
+        return False
+
+    changed = 0
+    ctx = st.spinner(f"Updating {pending} jobs…") if pending > 3 else _nullcontext()
+    with ctx:
+        for jid, r in edited.iterrows():
+            cur = status_by_id.get(jid)
+            # Dismiss wins over apply — user is dumping the row.
+            if "dismiss" in r and bool(r.get("dismiss")):
+                set_status(int(jid), "Archived")
+                changed += 1
+                continue
+            if "applied" in r:
+                want = bool(r.get("applied"))
+                if want and cur != "Applied":
+                    set_status(int(jid), "Applied"); changed += 1
+                elif not want and cur == "Applied":
+                    set_status(int(jid), "New"); changed += 1
+    if changed > 1:
+        st.toast(f"✅ Updated {changed} jobs", icon="🗑️")
+    return changed > 0
+
+
+class _nullcontext:
+    """Tiny stand-in for contextlib.nullcontext so we don't need the import
+    branch every call (streamlit's st.spinner is a context manager, so we
+    match its shape when there's nothing to spin for)."""
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
 
 
 def undo_last_status_change() -> str:
@@ -2168,6 +2195,53 @@ elif page == "🚀 AI-Ranked Queue":
         shown = [i for i in items if (i.get("fit_score") or 0) >= min_fit]
         st.caption(f"Showing {len(shown)} of {len(items)}")
 
+        # ---- Bulk-select toolbar ------------------------------------------
+        # Session-state set of ticked job ids. Persists across reruns until
+        # a bulk action is fired or the user clears.
+        if "aiq_selected" not in st.session_state:
+            st.session_state.aiq_selected = set()
+        sel = st.session_state.aiq_selected
+
+        bar_cols = st.columns([1, 1, 1, 1, 2])
+        if bar_cols[0].button(f"Select all ({len(shown)})", key="aiq_sel_all",
+                              use_container_width=True):
+            sel.update(i["id"] for i in shown)
+            st.rerun()
+        if bar_cols[1].button("Clear", key="aiq_sel_clear",
+                              use_container_width=True, disabled=not sel):
+            sel.clear()
+            st.rerun()
+        bulk_delete = bar_cols[2].button(
+            f"🗑️ Delete {len(sel)}" if sel else "🗑️ Delete 0",
+            key="aiq_bulk_delete", type="primary",
+            use_container_width=True, disabled=not sel,
+        )
+        bulk_approve = bar_cols[3].button(
+            f"✅ Approve {len(sel)}" if sel else "✅ Approve 0",
+            key="aiq_bulk_approve",
+            use_container_width=True, disabled=not sel,
+        )
+        bar_cols[4].caption(
+            f"**{len(sel)} selected** — tick the ☐ on any card to add. "
+            f"Bulk delete files them under 🗑️ Deleted (reversible via Undo)."
+            if sel else "Tick ☐ on any card to bulk-act on multiple jobs."
+        )
+
+        if bulk_delete and sel:
+            with st.spinner(f"Deleting {len(sel)} jobs…"):
+                for jid in list(sel):
+                    set_status(int(jid), "Archived")
+            st.toast(f"🗑️ Deleted {len(sel)} jobs", icon="✅")
+            sel.clear()
+            st.rerun()
+        if bulk_approve and sel:
+            with st.spinner(f"Approving {len(sel)} jobs…"):
+                for jid in list(sel):
+                    set_status(int(jid), "Approved")
+            st.toast(f"✅ Approved {len(sel)} jobs")
+            sel.clear()
+            st.rerun()
+
         for i in shown:
             fit = i.get("fit_score") or 0
             clear = i.get("clear_odds")
@@ -2208,7 +2282,24 @@ elif page == "🚀 AI-Ranked Queue":
                     f"{i['company_name']} · {i.get('location','?')} · "
                     f"H-1B score {i.get('h1b_score',0)}/100 · heuristic {i.get('match_score',0)}"
                     f"{sal_line}")
-                head_cols[2].markdown(f"[Open job →]({i['job_url']})")
+                # Right column: multi-select checkbox + open link + per-card
+                # delete button. Delete fires the moment it's clicked.
+                jid_int = int(i["id"])
+                with head_cols[2]:
+                    picked = st.checkbox(
+                        "select", key=f"aiq_pick_{jid_int}",
+                        value=jid_int in sel, label_visibility="collapsed")
+                    if picked:
+                        sel.add(jid_int)
+                    else:
+                        sel.discard(jid_int)
+                    st.markdown(f"[Open job →]({i['job_url']})")
+                    if st.button("🗑️ delete", key=f"aiq_del_{jid_int}",
+                                 use_container_width=True):
+                        with st.spinner("Deleting…"):
+                            set_status(jid_int, "Archived")
+                        st.toast(f"🗑️ Deleted: {i['title'][:40]}")
+                        st.rerun()
                 if i.get("pitch_line"):
                     st.markdown(
                         f"<blockquote style='border-left:3px solid #0969da;padding:8px 14px;"

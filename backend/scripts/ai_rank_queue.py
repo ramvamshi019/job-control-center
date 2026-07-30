@@ -130,7 +130,10 @@ Return ONLY a JSON object, no preface, no markdown fences:
     try:
         resp = client.messages.create(
             model=settings.anthropic_model,
-            max_tokens=400,
+            # 400 truncated ~25% of responses mid-JSON on first run. 800 gives
+            # headroom for 3 reasons + red flags + 35-word pitch line even
+            # with sonnet's thinking-token preamble.
+            max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
         # Sonnet-5 with thinking: iterate to first block with .text

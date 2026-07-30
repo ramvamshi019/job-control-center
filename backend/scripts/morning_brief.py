@@ -124,12 +124,43 @@ def _stats_last_24h() -> dict:
             """), {"d": d24}).all()
             top = [dict(r._mapping) for r in top_raw]
             ai_ranked = False
+        # Follow-up priority: Applied jobs >= 7 days old with no reply. Rank by
+        # (match_score + days_stale, capped) so a strong-fit application from
+        # 7d ago beats a weak-fit from 30d. LEFT JOIN drops any job that has
+        # gotten a message in job_messages (recruiter response of any kind).
+        d7 = now - timedelta(days=7)
+        try:
+            followups = c.execute(text("""
+                SELECT j.id, j.title, j.company_name, j.location, j.job_url,
+                       j.match_score, j.updated_at,
+                       CAST(julianday(:now) - julianday(j.updated_at) AS INTEGER) AS days_stale
+                FROM jobs j
+                LEFT JOIN job_messages m ON m.job_id = j.id
+                WHERE j.status = 'Applied'
+                  AND j.updated_at < :d7
+                  AND m.id IS NULL
+                ORDER BY (j.match_score + MIN(CAST(julianday(:now) - julianday(j.updated_at) AS INTEGER), 30)) DESC
+                LIMIT 5
+            """), {"now": now, "d7": d7}).all()
+        except Exception:
+            followups = []
+        # Total waiting count for the header line
+        try:
+            total_waiting = c.execute(text("""
+                SELECT COUNT(*) FROM jobs j
+                LEFT JOIN job_messages m ON m.job_id = j.id
+                WHERE j.status = 'Applied' AND j.updated_at < :d7 AND m.id IS NULL
+            """), {"d7": d7}).scalar() or 0
+        except Exception:
+            total_waiting = 0
     return {
         "total_jobs": total_jobs, "crawled_24h": crawled_24h,
         "survived_24h": survived_24h, "new_24h": new_24h,
         "active_companies": active_companies,
         "interviews": interviews, "rejections": rejections, "acks": acks,
         "top_jobs": top, "ai_ranked": ai_ranked,
+        "followups": [dict(r._mapping) for r in followups],
+        "total_waiting": total_waiting,
     }
 
 
@@ -207,6 +238,13 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
         if stats.get("ai_ranked") and j.get("pitch_line"):
             plain.append(f"      Pitch: {j['pitch_line']}")
     plain.append("")
+    fups = stats.get("followups") or []
+    if fups:
+        plain.append(f"-- 📮 Follow up on these today ({stats.get('total_waiting', 0)} total waiting >7d) --")
+        for f in fups:
+            plain.append(f"  [{f['days_stale']}d, score {f['match_score']}] {f['title']} @ {f['company_name']}")
+            plain.append(f"      {f['job_url']}")
+        plain.append("")
     plain.append(f"Open dashboard: {DASHBOARD_URL}")
     msg.set_content("\n".join(plain))
 
@@ -233,6 +271,29 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     top_html = "".join(_row(j) for j in stats["top_jobs"])
     top_heading = ("🚀 Top 5 AI-ranked apply queue"
                    if ai_ranked else "🎯 Top 5 fresh sponsor jobs to attack first")
+
+    fups = stats.get("followups") or []
+    total_waiting = stats.get("total_waiting", 0)
+    fup_html = ""
+    if fups:
+        fup_rows = "".join(
+            f"<tr>"
+            f"<td style='padding:8px 10px;background:#9a6700;color:#fff;font-weight:700;"
+            f"border-radius:4px;text-align:center;vertical-align:top'>"
+            f"{f['days_stale']}d</td>"
+            f"<td style='padding:8px 12px'><b>{f['title']}</b><br>"
+            f"<span style='color:#666'>{f['company_name']} · {f['location']} · "
+            f"score {f['match_score']}</span><br>"
+            f"<a href='{f['job_url']}'>Open job →</a></td>"
+            f"</tr>"
+            for f in fups
+        )
+        fup_html = (
+            f"<h3>📮 Follow up on these today "
+            f"<span style='color:#666;font-weight:400;font-size:14px'>"
+            f"({total_waiting} total waiting &gt;7d)</span></h3>"
+            f"<table style='border-collapse:collapse;width:100%;font-size:14px'>{fup_rows}</table>"
+        )
     html = f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:0 auto;padding:20px;color:#24292f">
     <h2 style="margin-top:0">🌙 JCC morning brief</h2>
     <p style="color:#666;font-size:14px">{now_str}</p>
@@ -252,6 +313,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     </table>
     <h3>{top_heading}</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">{top_html or '<tr><td>No new sponsor jobs in the last 24h — check ⚡ Fast Apply for the backlog.</td></tr>'}</table>
+    {fup_html}
     <p style="margin-top:24px"><a href="{DASHBOARD_URL}" style="color:#0969da;text-decoration:none;font-weight:600">Open dashboard →</a></p>
     </body></html>
     """

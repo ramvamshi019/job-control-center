@@ -2550,6 +2550,27 @@ elif page == "📬 Inbox":
         filtered = [m for m in msgs if m.get("classification") in klass_filter]
         badge = {"interview": "🎯 INTERVIEW", "rejection": "❌ REJECTION",
                  "ack": "📥 ACK", "other": "◼️ OTHER"}
+        def _gmail_search_url(m: dict) -> str:
+            """Build a Gmail search URL that opens the actual email in the user's
+            inbox. Prefers a subject-based search (highly specific); falls back
+            to from-address search."""
+            from urllib.parse import quote as _q
+            subj = (m.get("subject") or "").strip()
+            frm = (m.get("from_addr") or "").strip()
+            # Extract just the email address from "Name <addr@example.com>"
+            frm_addr = frm
+            m2 = re.search(r"<([^>]+)>", frm)
+            if m2:
+                frm_addr = m2.group(1)
+            if subj:
+                # Quote the subject for exact-phrase matching
+                q = f'subject:"{subj}"'
+            elif frm_addr:
+                q = f'from:{frm_addr}'
+            else:
+                return ""
+            return f"https://mail.google.com/mail/u/0/#search/{_q(q)}"
+
         rows = [{
             "when":    (m.get("received_at") or "")[:16].replace("T", " "),
             "type":    badge.get(m.get("classification"), m.get("classification") or ""),
@@ -2558,8 +2579,16 @@ elif page == "📬 Inbox":
             "company": m.get("company_name") or "",
             "subject": m.get("subject") or "",
             "preview": (m.get("snippet") or "")[:140],
+            "gmail":   _gmail_search_url(m),
         } for m in sorted(filtered, key=lambda x: x.get("received_at") or "", reverse=True)]
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(
+            pd.DataFrame(rows), hide_index=True, use_container_width=True,
+            column_config={
+                "gmail": st.column_config.LinkColumn(
+                    "📧 open", display_text="Gmail ↗",
+                    help="Opens Gmail search for this exact email subject in a new tab."),
+            },
+        )
 
 elif page == "🔙 Undo":
     st.header("🔙 Undo — recent status changes this session")

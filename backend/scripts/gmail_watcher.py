@@ -62,27 +62,51 @@ _REJECT_PATTERNS = (
     r"\bdifferent direction\b",
 )
 _INTERVIEW_PATTERNS = (
-    r"\bschedule (?:an? )?(?:call|chat|interview|meeting|conversation)\b",
-    r"\binterview (?:invitation|invite|process|loop|coming up)\b",
-    r"\bnext step", r"\bphone screen\b", r"\btechnical (?:screen|interview)\b",
-    r"\bwould you be (?:available|free)\b", r"\bavailability\b.*\bweek\b",
-    r"\bcalendly\b", r"\bcal\.com\b", r"\bpick a time\b",
+    # STRICT patterns -- must actually indicate scheduling / invitation.
+    # Loose "next step" was demoted because it false-positived on generic
+    # "we received your application, next steps in our process are..." ACKs
+    # (e.g. Thetradedesk auto-reply hit INTERVIEW).
+    r"\bschedule (?:an? )?(?:call|chat|interview|meeting|conversation|screen)\b",
+    r"\binterview (?:invitation|invite|loop|coming up)\b",
+    r"\bphone screen\b", r"\btechnical (?:screen|interview)\b",
+    r"\bwould (?:you|we) (?:like to )?(?:schedule|invite|meet|chat)\b",
+    r"\bwould you be (?:available|free) (?:for|to)\b",
+    r"\binvite you to (?:an? )?(?:interview|screen|call|chat)\b",
+    r"\bcalendly\.com\b", r"\bcal\.com/\b", r"\bpick a time\b", r"\bbook a time\b",
+    r"\bplease share (?:your|some) availability\b",
 )
 _ACK_PATTERNS = (
-    r"\bthank you for (?:your interest|applying|your application)\b",
+    # "next step(s)" moved here -- generic "next steps in the process"
+    # language is usually part of an ack email, not an interview invite.
+    r"\bthank you for (?:your interest|applying|your application|considering)\b",
     r"\bapplication received\b", r"\bwe.?ve received your\b",
     r"\bwill review\b", r"\bunder review\b",
+    r"\bnext step(?:s)? (?:in (?:our|the) process|will be)\b",
+    r"\bwe.?ll be in touch\b", r"\bhold on to your resume\b",
 )
 
 
 def classify(subject: str, body: str) -> str:
-    """Return one of: 'interview', 'rejection', 'ack', 'other'. Rules-based."""
+    """Return one of: 'interview', 'rejection', 'ack', 'other'. Rules-based.
+
+    Order matters: rejection > ack > interview. Ack wins over interview
+    when both match because auto-reply ACKs commonly include scheduling-
+    looking phrases they don't actually mean ('we may reach out to schedule').
+    A REAL interview invite typically has ONLY scheduling language, not
+    'thank you for applying' preamble.
+    """
     blob = f"{subject}\n{body[:2000]}".lower()
     if any(re.search(p, blob) for p in _REJECT_PATTERNS):
         return "rejection"
-    if any(re.search(p, blob) for p in _INTERVIEW_PATTERNS):
+    ack_hit = any(re.search(p, blob) for p in _ACK_PATTERNS)
+    interview_hit = any(re.search(p, blob) for p in _INTERVIEW_PATTERNS)
+    # If both match, ack wins -- auto-replies often contain scheduling-like
+    # language they don't actually mean.
+    if ack_hit and interview_hit:
+        return "ack"
+    if interview_hit:
         return "interview"
-    if any(re.search(p, blob) for p in _ACK_PATTERNS):
+    if ack_hit:
         return "ack"
     return "other"
 

@@ -50,7 +50,11 @@ services:
     # 2026-07-27: box resized to 4 vCPU / 8 GB — pushed harder (was 90/100/6 on
     # the 2-vCPU box). More workers + bigger batch ~doubles crawl throughput to
     # absorb the expanded company roster; still leaves ~1.5 vCPU for the API.
-    command: python scripts/live_watch.py --interval 60 --batch 200 --workers 12
+    # 2026-07-30: bumped 12→16 workers + 60→30s interval → ~2x sweep rate
+    # on the same 38k active pool. Still under the 2.5 CPU cap; API rate-
+    # limits (Greenhouse/Lever/Workday) are the real ceiling, not our
+    # concurrency. Batch stays 200 so a single cycle doesn't eat memory.
+    command: python scripts/live_watch.py --interval 30 --batch 200 --workers 16
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db

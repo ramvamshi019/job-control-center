@@ -715,7 +715,7 @@ else:
 
 page = st.sidebar.radio(
     "Pages",
-    ["⚡ Fast Apply", "🔎 Find Jobs", "🎯 Best Matches", "🎓 Entry Level",
+    ["⚡ Fast Apply", "🚀 AI-Ranked Queue", "🔎 Find Jobs", "🎯 Best Matches", "🎓 Entry Level",
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🎯 Sponsors Watchlist", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
@@ -1875,6 +1875,69 @@ elif page == "🟢 Live Feed":
             st.rerun()
 
     live_feed()
+
+elif page == "🚀 AI-Ranked Queue":
+    st.header("🚀 AI-Ranked Apply Queue")
+    st.caption("Yesterday's missed backlog, ranked by Claude for fit against "
+               "your F-1/OPT + data-engineer profile. Wakes up at 05:30 UTC "
+               "each day, so morning-you gets a ready-to-attack pitch list.")
+
+    resp = api_get("/ai_rank/queue", limit=40, min_fit=0) or {}
+    items = resp.get("items") or []
+
+    if not items:
+        st.info(resp.get("message") or "No AI rankings yet — check back after 05:30 UTC.")
+        st.markdown("**How this works:**")
+        st.markdown(
+            "- Every night at 05:30 UTC, Claude reads yesterday's un-actioned "
+            "sponsor jobs (24-48h old, still `New`/`Need Review`)\n"
+            "- Scores each 0-100 against your profile\n"
+            "- Writes a per-job pitch line you can paste into a cover letter\n"
+            "- Flags red flags (mismatch, senior-only, no-sponsor language)\n"
+            "- Top 5 land in your 06:00 UTC morning brief email"
+        )
+    else:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("In queue", len(items))
+        c2.metric("Avg AI fit", round(sum(i.get("fit_score") or 0 for i in items) / len(items)))
+        c3.metric("≥ 80 fit", sum(1 for i in items if (i.get("fit_score") or 0) >= 80))
+
+        min_fit = st.slider("Min AI fit score", 0, 100, 50, step=5)
+        shown = [i for i in items if (i.get("fit_score") or 0) >= min_fit]
+        st.caption(f"Showing {len(shown)} of {len(items)}")
+
+        for i in shown:
+            fit = i.get("fit_score") or 0
+            color = "#1a7f37" if fit >= 80 else "#9a6700" if fit >= 60 else "#666"
+            with st.container(border=True):
+                head_cols = st.columns([1, 4, 2])
+                head_cols[0].markdown(
+                    f"<div style='background:{color};color:#fff;font-weight:700;"
+                    f"font-size:22px;text-align:center;padding:12px;border-radius:6px'>"
+                    f"{fit}</div>", unsafe_allow_html=True)
+                head_cols[1].markdown(
+                    f"**{i['title']}**  \n"
+                    f"{i['company_name']} · {i.get('location','?')} · "
+                    f"H-1B score {i.get('h1b_score',0)}/100 · heuristic {i.get('match_score',0)}")
+                head_cols[2].markdown(f"[Open job →]({i['job_url']})")
+                if i.get("pitch_line"):
+                    st.markdown(
+                        f"<blockquote style='border-left:3px solid #0969da;padding:8px 14px;"
+                        f"margin:8px 0;background:#f0f7ff;color:#111;font-style:italic'>"
+                        f"&ldquo;{i['pitch_line']}&rdquo;</blockquote>",
+                        unsafe_allow_html=True)
+                reasons = i.get("reasons") or []
+                red_flags = i.get("red_flags") or []
+                if reasons or red_flags:
+                    rc, fc = st.columns(2)
+                    if reasons:
+                        rc.markdown("**✅ Fit reasons**")
+                        for r in reasons:
+                            rc.markdown(f"- {r}")
+                    if red_flags:
+                        fc.markdown("**⚠️ Red flags**")
+                        for r in red_flags:
+                            fc.markdown(f"- {r}")
 
 elif page == "⚡ Fast Apply":
     st.header("⚡ Fast Apply")

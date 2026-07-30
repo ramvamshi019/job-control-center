@@ -91,23 +91,45 @@ def _stats_last_24h() -> dict:
             """), {"d": d24}).scalar()
         except Exception:
             interviews = rejections = acks = 0
-        # Top-5 fresh sponsor jobs to attack first
-        top = c.execute(text("""
-            SELECT j.id, j.title, j.company_name, j.location, j.job_url, j.match_score
-            FROM jobs j
-            JOIN companies co ON co.id = j.company_id
-            WHERE j.discovered_at >= :d
-              AND j.status = 'New'
-              AND co.h1b_history_score >= 50
-            ORDER BY j.match_score DESC, j.discovered_at DESC
-            LIMIT 5
-        """), {"d": d24}).all()
+        # Prefer AI-ranked top 5 from yesterday's MISSED backlog (jobs
+        # posted 24-48h ago that Ram never actioned). Fall back to
+        # heuristic top-5 fresh sponsor jobs if the ranker hasn't run.
+        d48 = now - timedelta(hours=48)
+        try:
+            ai_top = c.execute(text("""
+                SELECT j.id, j.title, j.company_name, j.location, j.job_url,
+                       j.match_score, r.fit_score, r.reasons, r.pitch_line
+                FROM job_ai_ranking r
+                JOIN jobs j ON j.id = r.job_id
+                WHERE j.discovered_at >= :d48 AND j.discovered_at < :d24
+                  AND j.status IN ('New', 'Need Review')
+                ORDER BY r.fit_score DESC, j.discovered_at DESC
+                LIMIT 5
+            """), {"d24": d24, "d48": d48}).all()
+        except Exception:
+            ai_top = []
+        if ai_top:
+            top = [dict(r._mapping) for r in ai_top]
+            ai_ranked = True
+        else:
+            top_raw = c.execute(text("""
+                SELECT j.id, j.title, j.company_name, j.location, j.job_url, j.match_score
+                FROM jobs j
+                JOIN companies co ON co.id = j.company_id
+                WHERE j.discovered_at >= :d
+                  AND j.status = 'New'
+                  AND co.h1b_history_score >= 50
+                ORDER BY j.match_score DESC, j.discovered_at DESC
+                LIMIT 5
+            """), {"d": d24}).all()
+            top = [dict(r._mapping) for r in top_raw]
+            ai_ranked = False
     return {
         "total_jobs": total_jobs, "crawled_24h": crawled_24h,
         "survived_24h": survived_24h, "new_24h": new_24h,
         "active_companies": active_companies,
         "interviews": interviews, "rejections": rejections, "acks": acks,
-        "top_jobs": [dict(r._mapping) for r in top],
+        "top_jobs": top, "ai_ranked": ai_ranked,
     }
 
 
@@ -176,11 +198,14 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
         f"  ❌ Rejections:  {stats['rejections']} (auto-moved to Rejected page)",
         f"  📥 Acks:        {stats['acks']}",
         "",
-        "-- Top 5 fresh sponsor jobs to attack first --",
+        f"-- Top 5 {'AI-ranked' if stats.get('ai_ranked') else 'heuristic'} sponsor jobs to attack first --",
     ]
     for j in stats["top_jobs"]:
-        plain.append(f"  [{j['match_score']}] {j['title']} @ {j['company_name']} — {j['location']}")
+        score_label = f"AI {j['fit_score']}" if stats.get("ai_ranked") and j.get("fit_score") is not None else str(j['match_score'])
+        plain.append(f"  [{score_label}] {j['title']} @ {j['company_name']} — {j['location']}")
         plain.append(f"      {j['job_url']}")
+        if stats.get("ai_ranked") and j.get("pitch_line"):
+            plain.append(f"      Pitch: {j['pitch_line']}")
     plain.append("")
     plain.append(f"Open dashboard: {DASHBOARD_URL}")
     msg.set_content("\n".join(plain))
@@ -189,15 +214,25 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     ai_html = (f"<blockquote style='border-left:3px solid #0969da;padding:8px 16px;"
                f"margin:16px 0;color:#333;background:#f0f7ff;border-radius:4px'>"
                f"{ai_take}</blockquote>") if ai_take else ""
-    top_html = "".join(
-        f"<tr>"
-        f"<td style='padding:8px 10px;background:#1a7f37;color:#fff;font-weight:700;border-radius:4px'>{j['match_score']}</td>"
-        f"<td style='padding:8px 12px'><b>{j['title']}</b><br>"
-        f"<span style='color:#666'>{j['company_name']} · {j['location']}</span><br>"
-        f"<a href='{j['job_url']}'>Apply →</a></td>"
-        f"</tr>"
-        for j in stats["top_jobs"]
-    )
+    ai_ranked = stats.get("ai_ranked")
+    def _row(j):
+        score = j.get('fit_score') if ai_ranked and j.get('fit_score') is not None else j.get('match_score')
+        badge_bg = '#0969da' if ai_ranked else '#1a7f37'
+        pitch = ""
+        if ai_ranked and j.get('pitch_line'):
+            pitch = (f"<div style='margin-top:6px;padding:6px 10px;background:#f6f8fa;"
+                     f"border-left:2px solid #0969da;font-size:13px;color:#333;font-style:italic'>"
+                     f"&ldquo;{j['pitch_line']}&rdquo;</div>")
+        return (
+            f"<tr><td style='padding:8px 10px;background:{badge_bg};color:#fff;"
+            f"font-weight:700;border-radius:4px;vertical-align:top'>{score}</td>"
+            f"<td style='padding:8px 12px'><b>{j['title']}</b><br>"
+            f"<span style='color:#666'>{j['company_name']} · {j['location']}</span><br>"
+            f"<a href='{j['job_url']}'>Apply →</a>{pitch}</td></tr>"
+        )
+    top_html = "".join(_row(j) for j in stats["top_jobs"])
+    top_heading = ("🚀 Top 5 AI-ranked apply queue"
+                   if ai_ranked else "🎯 Top 5 fresh sponsor jobs to attack first")
     html = f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:0 auto;padding:20px;color:#24292f">
     <h2 style="margin-top:0">🌙 JCC morning brief</h2>
     <p style="color:#666;font-size:14px">{now_str}</p>
@@ -215,7 +250,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
       <tr><td style="padding:4px 12px;color:#666">❌ Rejections (auto-moved)</td><td style="padding:4px 12px;font-weight:600;color:#b91c1c">{stats['rejections']}</td></tr>
       <tr><td style="padding:4px 12px;color:#666">📥 Acks</td><td style="padding:4px 12px;font-weight:600">{stats['acks']}</td></tr>
     </table>
-    <h3>🎯 Top 5 fresh sponsor jobs to attack first</h3>
+    <h3>{top_heading}</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">{top_html or '<tr><td>No new sponsor jobs in the last 24h — check ⚡ Fast Apply for the backlog.</td></tr>'}</table>
     <p style="margin-top:24px"><a href="{DASHBOARD_URL}" style="color:#0969da;text-decoration:none;font-weight:600">Open dashboard →</a></p>
     </body></html>

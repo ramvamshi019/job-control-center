@@ -170,6 +170,31 @@ def _stats_last_24h() -> dict:
         except Exception:
             total_waiting = 0
 
+        # Hot Hiring: sponsor companies with tech relevance. Filter to
+        # companies where fresh jobs count = only jobs that PASSED the
+        # scoring filter (status IN 'New'/'Need Review'), so Davita's 900
+        # nurse openings don't dominate. Ordered by tech-relevant fresh count.
+        try:
+            d30 = now - timedelta(days=30)
+            hot_hire = c.execute(text("""
+                SELECT co.name,
+                       COUNT(*) AS total_jobs,
+                       SUM(CASE WHEN j.discovered_at >= :d7 AND j.status IN ('New', 'Need Review')
+                                THEN 1 ELSE 0 END) AS fresh_7d_tech,
+                       COALESCE(co.h1b_history_score, 0) AS h1b_score
+                FROM companies co
+                JOIN jobs j ON j.company_id = co.id
+                WHERE j.discovered_at >= :d30
+                  AND COALESCE(co.h1b_history_score, 0) >= 60
+                  AND j.status IN ('New', 'Need Review', 'Approved', 'Applied')
+                GROUP BY co.id
+                HAVING fresh_7d_tech >= 3
+                ORDER BY fresh_7d_tech DESC, total_jobs DESC
+                LIMIT 8
+            """), {"d30": d30, "d7": d7}).all()
+        except Exception:
+            hot_hire = []
+
         # Ghosted: Applied >30d, no message. Signal to move on emotionally
         # (and to stop wasting follow-up energy).
         d30 = now - timedelta(days=30)
@@ -281,6 +306,7 @@ def _stats_last_24h() -> dict:
         "total_waiting": total_waiting,
         "ghosted_total": ghosted_total,
         "new_ghosts": new_ghosts,
+        "hot_hire": [dict(r._mapping) for r in hot_hire],
         "filter_sanity": {
             "keep_rows": [dict(r._mapping) for r in keep_rows],
             "sampled": fs_total,
@@ -401,6 +427,14 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             plain.append(f"  [{f['days_stale']}d, score {f['match_score']}] {f['title']} @ {f['company_name']}")
             plain.append(f"      {f['job_url']}")
         plain.append("")
+    hot = stats.get("hot_hire") or []
+    if hot:
+        plain.append(f"-- 🔥 Hot hiring — sponsors with 3+ fresh jobs this week --")
+        for h in hot:
+            plain.append(f"  {h['name']} — {h['fresh_7d_tech']} fresh, "
+                         f"{h['total_jobs']} total in 30d (h1b {h['h1b_score']}/100)")
+        plain.append("")
+
     fs = stats.get("filter_sanity") or {}
     if fs.get("sampled"):
         plain.append(f"-- 📊 Filter sanity ({fs['keep_count']}/{fs['sampled']} false-negatives = {fs['false_neg_rate']}%) --")
@@ -480,6 +514,27 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             f"<span style='color:#666;font-weight:400;font-size:14px'>"
             f"({total_waiting} total waiting &gt;7d)</span></h3>"
             f"<table style='border-collapse:collapse;width:100%;font-size:14px'>{fup_rows}</table>"
+        )
+
+    hot = stats.get("hot_hire") or []
+    hot_html = ""
+    if hot:
+        rows_html = "".join(
+            f"<tr>"
+            f"<td style='padding:6px 12px;background:#fee2e2;color:#7f1d1d;"
+            f"font-weight:700;text-align:center;border-radius:4px;vertical-align:top'>"
+            f"+{h['fresh_7d_tech']}</td>"
+            f"<td style='padding:6px 12px'><b>{h['name']}</b><br>"
+            f"<span style='color:#666;font-size:12px'>"
+            f"{h['fresh_7d_tech']} fresh this week · {h['total_jobs']} total in 30d · "
+            f"H-1B {h['h1b_score']}/100</span></td></tr>"
+            for h in hot
+        )
+        hot_html = (
+            f"<h3>🔥 Hot hiring "
+            f"<span style='color:#666;font-weight:400;font-size:14px'>"
+            f"(sponsors with 3+ fresh jobs this week)</span></h3>"
+            f"<table style='border-collapse:collapse;width:100%;font-size:14px'>{rows_html}</table>"
         )
 
     fs = stats.get("filter_sanity") or {}
@@ -570,6 +625,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     <h3>{top_heading}</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">{top_html or '<tr><td>No new sponsor jobs in the last 24h — check ⚡ Fast Apply for the backlog.</td></tr>'}</table>
     {fup_html}
+    {hot_html}
     {fs_html}
     <p style="margin-top:24px"><a href="{DASHBOARD_URL}" style="color:#0969da;text-decoration:none;font-weight:600">Open dashboard →</a></p>
     </body></html>

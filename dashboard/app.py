@@ -1799,10 +1799,11 @@ elif page == "🗓️ Date Browser":
     from datetime import date, datetime, timedelta
     st.header("🗓️ Date Browser")
     st.caption("Pick any date — see every job the crawler discovered in that "
-               "24-hour window, ranked by Claude's reality-check (🚦 clear = "
-               "odds you clear the filter) first, then heuristic score. Use "
-               "the filters below to slice by max years-of-experience or hide "
-               "citizenship/clearance walls.")
+               "24-hour UTC window (00:00-24:00 UTC), ranked by Claude's "
+               "reality-check (🚦 clear = odds you clear the filter) first. "
+               "Counts will differ from Last 24h (which is a rolling window "
+               "from right now). 🕒 last-seen column warns when a job hasn't "
+               "been seen in a while — the apply URL may be dead.")
 
     c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
     # Default to yesterday since today's still filling in
@@ -1830,9 +1831,13 @@ elif page == "🗓️ Date Browser":
              "survive the employer's filter.",
     )
 
-    m1, m2 = st.columns([3, 2])
+    m1, m2, m3 = st.columns([2, 2, 2])
     only_sponsors = m1.checkbox("Only ✅ H-1B sponsors", value=False)
     hide_applied = m2.checkbox("Hide jobs I've already applied to", value=True)
+    hide_stale = m3.checkbox("Hide 🔴 stale (>7d not seen — URL likely dead)", value=True,
+                             help="Drops jobs where the crawler hasn't confirmed "
+                                  "the URL is still live in the last 7 days. "
+                                  "These usually 404 when clicked.")
 
     # Compute the discovered_within_hours window from picked date.
     now = datetime.utcnow()
@@ -1856,6 +1861,10 @@ elif page == "🗓️ Date Browser":
         data = [j for j in data if j.get("status") != "Applied"]
     if only_sponsors:
         data = [j for j in data if j.get("sponsor_confirmed")]
+    if hide_stale:
+        cutoff_stale = (date.today() - timedelta(days=7)).isoformat()
+        data = [j for j in data
+                if ((j.get("last_seen_at") or j.get("discovered_at") or "")[:10] >= cutoff_stale)]
 
     # Max-years filter using existing helper
     if max_yrs != "Any":
@@ -1906,6 +1915,22 @@ elif page == "🗓️ Date Browser":
                 "Try Any-years / no clearance / no sponsor gate.")
         st.stop()
 
+    # Freshness helper: compute how many days since last_seen_at. If > 2d,
+    # the job is likely closed and the apply URL will 404. Show as an emoji.
+    def _staleness(j):
+        ls = (j.get("last_seen_at") or j.get("discovered_at") or "")[:10]
+        if not ls:
+            return "?"
+        try:
+            days = (date.today() - date.fromisoformat(ls)).days
+        except (ValueError, TypeError):
+            return "?"
+        if days == 0: return "🟢 today"
+        if days == 1: return "🟢 1d ago"
+        if days <= 2: return f"🟡 {days}d ago"
+        if days <= 7: return f"🟠 {days}d ago"
+        return f"🔴 {days}d ago (likely closed)"
+
     rows = [{
         "id": j.get("id"),
         "applied": j.get("status") == "Applied",
@@ -1919,7 +1944,7 @@ elif page == "🗓️ Date Browser":
         "company": j.get("company_name"),
         "location": j.get("location"),
         "posted": (j.get("posted_at") or "")[:10] or "—",
-        "discovered": (j.get("discovered_at") or "")[:16].replace("T", " "),
+        "last_seen": _staleness(j),
         "open": apply_url(j),
     } for j in data[:500]]  # cap at 500 for grid render sanity
     df = pd.DataFrame(rows).set_index("id")
@@ -1928,9 +1953,9 @@ elif page == "🗓️ Date Browser":
     edited = st.data_editor(
         df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
         disabled=["status", "sponsor", "score", "ai", "clear", "title", "company",
-                  "location", "posted", "discovered", "open"],
+                  "location", "posted", "last_seen", "open"],
         column_order=["status", "sponsor", "score", "ai", "clear", "title", "company",
-                      "location", "posted", "discovered", "open", "applied", "dismiss"],
+                      "location", "posted", "last_seen", "open", "applied", "dismiss"],
         column_config={
             "applied": st.column_config.CheckboxColumn(
                 "✅ Applied?", help="Tick when you've submitted."),
@@ -1938,8 +1963,11 @@ elif page == "🗓️ Date Browser":
                 "🗑️", help="Dismiss — files to 🗑️ Deleted."),
             "open": st.column_config.LinkColumn("open", display_text="open ↗"),
             "score": st.column_config.NumberColumn("score", format="%d"),
-            "discovered": st.column_config.TextColumn(
-                "discovered UTC", help="When the crawler first saw the job."),
+            "last_seen": st.column_config.TextColumn(
+                "🕒 last seen",
+                help="When the crawler last confirmed the job was still live. "
+                     "🔴 >7d = the posting is likely closed and the apply URL "
+                     "will 404. 🟢/🟡 fresh = safe to click."),
             **_ai_column_config(),
         },
     )

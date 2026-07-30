@@ -2908,7 +2908,18 @@ elif page == "🎓 Interview Prep":
     if job.get("job_url"):
         st.markdown(f"[Open posting ↗]({job['job_url']})")
 
-    if st.button("🎯 Generate interview prep with Claude"):
+    # Prefer overnight-cached prep if available (interview_prep_batch.py
+    # writes to ai_interview_prep for any Applied job in the last 7 days).
+    cache = api_get(f"/ai_rank/interview_prep/{job['id']}") or {}
+    if cache.get("cached") and cache.get("content_md"):
+        st.success(f"✨ Cached prep from {cache.get('generated_at','?')[:16]} UTC — no wait, no new tokens.")
+        st.markdown(cache["content_md"])
+        st.divider()
+        if st.button("🔄 Regenerate with Claude (~$0.02, 15s)"):
+            st.session_state["_force_regen"] = True
+
+    force_regen = st.session_state.pop("_force_regen", False)
+    if force_regen or (not cache.get("cached") and st.button("🎯 Generate interview prep with Claude")):
         # Direct call to Anthropic (dashboard has API key via env_file now)
         try:
             import anthropic  # bundled in the shared image

@@ -59,3 +59,22 @@ def queue(limit: int = 40, min_fit: int = 0):
                 d[f] = []
         items.append(d)
     return {"count": len(items), "items": items}
+
+
+@router.get("/interview_prep/{job_id}")
+def interview_prep(job_id: int):
+    """Return cached interview prep sheet for a job (if any).
+    Populated nightly by scripts/interview_prep_batch.py for Applied jobs.
+    """
+    with engine.connect() as c:
+        exists = c.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='ai_interview_prep'"
+        )).scalar()
+        if not exists:
+            return {"cached": False, "content_md": None}
+        row = c.execute(text(
+            "SELECT content_md, generated_at FROM ai_interview_prep WHERE job_id = :j"
+        ), {"j": job_id}).fetchone()
+    if not row:
+        return {"cached": False, "content_md": None}
+    return {"cached": True, "content_md": row[0], "generated_at": str(row[1])}

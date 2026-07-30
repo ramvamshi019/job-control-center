@@ -1920,13 +1920,26 @@ elif page == "🚀 AI-Ranked Queue":
 
         for i in shown:
             fit = i.get("fit_score") or 0
+            clear = i.get("clear_odds")
             color = "#1a7f37" if fit >= 80 else "#9a6700" if fit >= 60 else "#666"
             with st.container(border=True):
                 head_cols = st.columns([1, 4, 2])
+                # Two badges stacked: fit_score on top, clear_odds below (if run).
+                # clear_odds < 40 red-flags the row — Ram sees at a glance that
+                # a "88 fit" job with "22 clear" is actually a lost cause.
+                clear_html = ""
+                if clear is not None:
+                    ccolor = "#1a7f37" if clear >= 70 else "#9a6700" if clear >= 40 else "#b91c1c"
+                    clear_html = (
+                        f"<div style='background:{ccolor};color:#fff;font-weight:600;"
+                        f"font-size:11px;text-align:center;padding:4px;border-radius:4px;"
+                        f"margin-top:4px' title='Reality check: odds Ram clears this filter'>"
+                        f"🚦 {clear}</div>"
+                    )
                 head_cols[0].markdown(
                     f"<div style='background:{color};color:#fff;font-weight:700;"
                     f"font-size:22px;text-align:center;padding:12px;border-radius:6px'>"
-                    f"{fit}</div>", unsafe_allow_html=True)
+                    f"🚀 {fit}</div>{clear_html}", unsafe_allow_html=True)
                 sal = i.get("salary") or {}
                 sal_line = ""
                 if sal.get("min") or sal.get("max"):
@@ -1997,13 +2010,18 @@ elif page == "🚀 AI-Ranked Queue":
                         )
                 reasons = i.get("reasons") or []
                 red_flags = i.get("red_flags") or []
-                if reasons or red_flags:
+                blockers = i.get("clear_blockers") or []
+                if reasons or red_flags or blockers:
                     rc, fc = st.columns(2)
                     if reasons:
                         rc.markdown("**✅ Fit reasons**")
                         for r in reasons:
                             rc.markdown(f"- {r}")
-                    if red_flags:
+                    if blockers:
+                        fc.markdown("**🚦 Filter blockers**")
+                        for r in blockers:
+                            fc.markdown(f"- {r}")
+                    elif red_flags:
                         fc.markdown("**⚠️ Red flags**")
                         for r in red_flags:
                             fc.markdown(f"- {r}")

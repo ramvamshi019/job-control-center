@@ -70,6 +70,16 @@ def _ensure_table() -> None:
             c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN salary_json TEXT"))
         except Exception:
             pass
+        # Reality-check pass (task 71) — separate score for "will Ram clear
+        # this employer's actual filter", vs fit_score which is skill overlap.
+        try:
+            c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN clear_odds INTEGER"))
+        except Exception:
+            pass
+        try:
+            c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN clear_blockers TEXT"))
+        except Exception:
+            pass
 
 
 def _pick_candidates() -> list[dict]:
@@ -195,15 +205,92 @@ Return ONLY a JSON object, no preface, no markdown fences:
         return None
 
 
-def _store(job_id: int, result: dict) -> None:
+def _reality_check(client, job: dict) -> dict | None:
+    """Second Claude call — 'ignore skill overlap, will Ram clear their
+    actual filter?'. Catches structural gates the fit-score alone misses:
+      - OSS PRs required (Hugging Face, HashiCorp, etc)
+      - Senior/staff/principal-in-disguise ("Data Engineer II" == 3-5y)
+      - Clearance / citizenship walls
+      - In-person only in a Ram-hostile city
+      - Domain-specialty specifics (iOS Data Engineer = iOS eng, not DE)
+      - Contract / staffing agency reposts of the same JD
+    """
+    desc = (job.get("description") or "")[:DESC_TRUNC]
+    prompt = f"""You're a hiring-filter reality-checker for Ram, an F-1 OPT data engineer.
+
+Ram's profile:
+- 2 years experience (J&J internship + coursework)
+- Skills: {settings.my_skills}
+- Target roles: {settings.my_target_roles}
+- Work auth: {settings.my_work_auth}
+- Public: 3 GitHub projects (JobJarvis, Ecommerce-ML, this JCC crawler). NO merged PRs to major OSS ML libraries.
+- Location: US-based
+
+Job to reality-check:
+- Title: {job['title']}
+- Company: {job['company_name']} (H-1B history score: {job['h1b_score']}/100)
+- Location: {job['location']}
+- Description (truncated): {desc}
+
+Ignore skill overlap. Judge ONLY: will Ram clear this employer's ACTUAL filter? Look for structural blockers:
+- Does the JD explicitly require OSS contributions / GitHub track record he doesn't have?
+- Does the title imply seniority (II/III/Senior/Staff/Lead/Principal/Manager) beyond 2y?
+- Clearance / citizenship / green-card wall?
+- In-person only in NYC/SF/Bay Area/Seattle with high cost-of-living?
+- Domain specialty that requires prior work in that domain (iOS, embedded, network, game, security)?
+- Contract / C2C / 1099 / staffing agency repost?
+- Explicit no-sponsor / no-visa language?
+
+Return ONLY a JSON object, no preface, no markdown:
+{{
+  "clear_odds": <int 0-100, honest odds he clears the filter — 90+ = easy pass, 40-70 = stretch, <30 = won't clear>,
+  "blockers": ["<short blocker phrase>", "<blocker>"]
+}}
+
+Bias: default to HIGH clear_odds unless you find a specific gate. Empty blockers list = full clear."""
+
+    try:
+        resp = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = ""
+        for block in resp.content:
+            if getattr(block, "type", None) == "text" or hasattr(block, "text"):
+                try:
+                    raw = block.text.strip()
+                    break
+                except AttributeError:
+                    continue
+        parsed = _extract_json(raw)
+        if not parsed or "clear_odds" not in parsed:
+            log.info("job %d: reality-check missing clear_odds (raw=%r)", job["id"], raw[:120])
+            return None
+        return parsed
+    except Exception as e:  # noqa: BLE001
+        log.warning("job %d: reality-check call failed: %s", job["id"], e)
+        return None
+
+
+def _store(job_id: int, result: dict, reality: dict | None = None) -> None:
     p = result["parsed"]
+    clear_odds = None
+    blockers_json = None
+    if reality:
+        try:
+            clear_odds = int(reality.get("clear_odds") or 0)
+        except (ValueError, TypeError):
+            clear_odds = 0
+        blockers_json = json.dumps(reality.get("blockers") or [])
     with engine.begin() as c:
         c.execute(text("""
             INSERT INTO job_ai_ranking
                 (job_id, fit_score, reasons, red_flags, pitch_line, keywords,
-                 referral_dm, salary_json, raw_json, generated_at)
+                 referral_dm, salary_json, clear_odds, clear_blockers,
+                 raw_json, generated_at)
             VALUES
-                (:jid, :fs, :rs, :rf, :pl, :kw, :dm, :sal, :rj, :ts)
+                (:jid, :fs, :rs, :rf, :pl, :kw, :dm, :sal, :co, :cb, :rj, :ts)
             ON CONFLICT(job_id) DO UPDATE SET
                 fit_score = excluded.fit_score,
                 reasons = excluded.reasons,
@@ -212,6 +299,8 @@ def _store(job_id: int, result: dict) -> None:
                 keywords = excluded.keywords,
                 referral_dm = excluded.referral_dm,
                 salary_json = excluded.salary_json,
+                clear_odds = excluded.clear_odds,
+                clear_blockers = excluded.clear_blockers,
                 raw_json = excluded.raw_json,
                 generated_at = excluded.generated_at
         """), {
@@ -223,6 +312,8 @@ def _store(job_id: int, result: dict) -> None:
             "kw": json.dumps(p.get("keywords") or []),
             "dm": (p.get("referral_dm") or "").strip(),
             "sal": json.dumps(p.get("salary") or {}),
+            "co": clear_odds,
+            "cb": blockers_json,
             "rj": result["raw"],
             "ts": utcnow_naive(),
         })
@@ -244,22 +335,32 @@ def run() -> dict:
 
     ranked = 0
     failed = 0
+    reality_ran = 0
     for j in candidates:
         result = _rank_one(client, j)
         if not result:
             failed += 1
             continue
-        _store(j["id"], result)
+        # Reality-check runs only on the promising ones (fit >= 60) — no
+        # point spending tokens on jobs we're already going to skip.
+        reality = None
+        try:
+            if int(result["parsed"].get("fit_score", 0)) >= 60:
+                reality = _reality_check(client, j)
+                if reality:
+                    reality_ran += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("job %d: reality wrapper error: %s", j["id"], e)
+        _store(j["id"], result, reality)
         ranked += 1
+    log.info("ai_rank_queue: reality checks ran on %d/%d jobs", reality_ran, ranked)
 
-    # Auto-Approve pass: any job Claude scored >= 85 AND currently 'New'
-    # AND at a sponsor gets promoted to 'Approved'. Signal: "Claude is
-    # highly confident this is a top pick." Ram wakes up with a pre-vetted
-    # queue on the 🎯 Approved page. Reversible via Undo.
-    #
-    # Bar was 90 initially but Sonnet with the extended field set (salary
-    # etc) rarely hits >=90 on data-eng roles — 85 is still 3-4 sigma from
-    # the median score and produces a small, high-signal pool.
+    # Auto-Approve pass: fit_score >= 85 AND clear_odds >= 70 AND sponsor.
+    # BOTH scores must be high — old logic only checked skill overlap and
+    # would auto-approve Hugging Face at 88 fit even though clear_odds is
+    # in the 20s (needs merged Transformers PRs Ram doesn't have). Now
+    # jobs that look like a skill match but won't clear the filter STAY
+    # in New (Ram can review manually), not Approved.
     autoapp = 0
     try:
         with engine.begin() as c:
@@ -271,6 +372,7 @@ def run() -> dict:
                     LEFT JOIN companies co ON co.id = j.company_id
                     WHERE j.status = 'New'
                       AND r.fit_score >= 85
+                      AND (r.clear_odds IS NULL OR r.clear_odds >= 70)
                       AND COALESCE(co.h1b_history_score, 0) >= 60
                 )
             """), {"ts": utcnow_naive()})

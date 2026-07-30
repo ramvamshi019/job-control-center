@@ -91,6 +91,11 @@ services:
       streamlit run dashboard/app.py
       --server.port 8501 --server.address 0.0.0.0 --server.headless true
       --server.enableCORS false --server.enableXsrfProtection false
+    # Give dashboard read access to the backend .env so it can call the
+    # Anthropic API directly (Interview Prep page uses it). No harm --
+    # same trust boundary as backend, both containers run root on the
+    # same droplet from the same image.
+    env_file: ./backend/.env
     environment:
       - API_BASE_URL=http://backend:8000
       # "Posted Today" / "fresh today" are computed in THIS zone, not the

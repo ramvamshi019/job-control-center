@@ -719,7 +719,8 @@ page = st.sidebar.radio(
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🎯 Sponsors Watchlist", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
-     "📊 Analytics", "🧠 Skills Gap", "📈 Ops Health", "📬 Inbox", "🔙 Undo",
+     "📊 Analytics", "🧠 Skills Gap", "🎓 Interview Prep", "📈 Ops Health",
+     "📬 Inbox", "🔙 Undo",
      "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
      "Applied", "🗑️ Deleted", "Rejected", "Companies", "Stats",
@@ -2779,6 +2780,107 @@ elif page == "📊 Analytics":
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         else:
             st.info("Every high-score applied job has a tracked response. Nice.")
+
+elif page == "🎓 Interview Prep":
+    st.header("🎓 AI Interview Prep")
+    st.caption("Pick an applied job → Claude generates ~10 behavioral questions "
+               "(STAR-format answer templates) + 5 technical questions grounded in "
+               "the JD's actual tech stack + suggested talking points. Costs ~$0.02 "
+               "per generation on Anthropic (Sonnet 5). Bookmark or save results — "
+               "regenerating burns another $0.02.")
+
+    # Only surface Applied jobs -- no point prepping for stuff you haven't applied to.
+    applied = api_get("/jobs/", status="Applied", limit=500) or []
+    if not applied:
+        st.info("Apply to a job first, then it'll appear here for interview prep.")
+        st.stop()
+
+    # Newest applied at the top
+    applied.sort(key=lambda j: (j.get("updated_at") or ""), reverse=True)
+    labels = [f"{j.get('title','?')[:60]}  @  {j.get('company_name','?')[:30]}"
+              for j in applied]
+    idx = st.selectbox("Job to prep for", range(len(applied)),
+                        format_func=lambda i: labels[i])
+    job = applied[idx]
+
+    st.markdown(f"**{job.get('title')}** — {job.get('company_name')} · "
+                f"{job.get('location', '—')}")
+    if job.get("job_url"):
+        st.markdown(f"[Open posting ↗]({job['job_url']})")
+
+    if st.button("🎯 Generate interview prep with Claude"):
+        # Direct call to Anthropic (dashboard has API key via env_file now)
+        try:
+            import anthropic  # bundled in the shared image
+        except ImportError:
+            st.error("anthropic SDK not installed in dashboard container. "
+                     "Rebuild + restart with the updated docker-compose.")
+            st.stop()
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not api_key:
+            st.error("ANTHROPIC_API_KEY not set in the environment. Check "
+                     "backend/.env on the droplet and ensure dashboard has "
+                     "env_file: ./backend/.env in docker-compose.yml.")
+            st.stop()
+
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+        prof = my_profile()
+        resume_summary = ""
+        # If a résumé file is available, embed a short excerpt for context
+        m = master_resume()
+        if m.get("pdf") or m.get("docx"):
+            resume_summary = "(User's résumé is on file; assume standard SWE/DE background.)"
+
+        prompt = f"""You're an interview coach helping someone prep for the below role. Generate a focused prep sheet in Markdown. Be specific and grounded in the JD's actual language — no generic "tell me about yourself" filler unless clearly relevant.
+
+# Role
+Title: {job.get('title')}
+Company: {job.get('company_name')}
+Location: {job.get('location', 'N/A')}
+
+# Job Description (truncated)
+{(job.get('description') or '')[:3500]}
+
+# Candidate profile
+{resume_summary or 'F-1 OPT candidate, data engineering background, 2 yrs experience.'}
+
+# Output format (Markdown)
+
+## 🧠 10 Behavioral Questions (STAR-ready)
+For each: the question + a **1-line hook** on which experience to lead with (based on typical DE background — pipelines, migrations, incident response, cross-team work). No full answers, just prompts.
+
+## 🔧 5 Technical Questions (from THIS JD's stack)
+Grounded in what the JD actually mentions. Include one system-design question if the JD hints at scale. For each: the question + a 1-line hint on how to approach it.
+
+## 🎯 3 Company-Specific Talking Points
+What to research + what to bring up as "I've been following your work on X". Extract from the JD if possible, else infer from company name.
+
+## ❓ 3 Smart Questions to Ask THEM at the end
+Not generic — tied to something the JD mentions. Ex: 'You mentioned migrating to Iceberg — what's the timeline and what's the current bottleneck?'
+"""
+
+        with st.spinner("Claude is thinking (10-15 sec)..."):
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=2500,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                out = resp.content[0].text
+            except Exception as e:  # noqa: BLE001
+                st.error(f"Anthropic API call failed: {e}")
+                st.stop()
+
+        st.markdown(out)
+        st.download_button(
+            "💾 Save prep sheet (.md)",
+            data=out,
+            file_name=f"prep_{(job.get('company_name') or 'company').replace(' ', '_')}_"
+                      f"{(job.get('title') or 'role').replace(' ', '_')[:40]}.md",
+            mime="text/markdown",
+        )
 
 elif page == "📈 Ops Health":
     st.header("📈 Ops Health")

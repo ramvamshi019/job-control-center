@@ -750,7 +750,7 @@ page = st.sidebar.radio(
     ["⚡ Fast Apply", "🚀 AI-Ranked Queue", "🔎 Find Jobs", "🎯 Best Matches", "🎓 Entry Level",
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🎯 Sponsors Watchlist", "🔴 Posted Today", "📆 Last 24 Hours",
-     "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
+     "📅 Posted This Week", "🗓️ Date Browser", "🟢 Live Feed", "Today's Best Jobs",
      "📊 Analytics", "🧠 Skills Gap", "🎓 Interview Prep", "📈 Ops Health",
      "📬 Inbox", "🔙 Undo",
      "⚙️ Gmail Settings", "❄️ Frozen Companies",
@@ -1794,6 +1794,155 @@ elif page == "📅 Posted This Week":
             st.rerun()
 
     posted_this_week_feed()
+
+elif page == "🗓️ Date Browser":
+    from datetime import date, datetime, timedelta
+    st.header("🗓️ Date Browser")
+    st.caption("Pick any date — see every job the crawler discovered in that "
+               "24-hour window, ranked by Claude's reality-check (🚦 clear = "
+               "odds you clear the filter) first, then heuristic score. Use "
+               "the filters below to slice by max years-of-experience or hide "
+               "citizenship/clearance walls.")
+
+    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+    # Default to yesterday since today's still filling in
+    picked = c1.date_input(
+        "Discovered on", value=date.today() - timedelta(days=1),
+        min_value=date.today() - timedelta(days=60),
+        max_value=date.today(),
+        help="Any date in the last 60 days. Older jobs get archived nightly.",
+    )
+    max_yrs = c2.selectbox(
+        "Max years required", ["Any", "0-2 yrs (entry)", "≤ 3 yrs", "≤ 5 yrs"],
+        index=0,
+        help="Parses the JD for 'N years' — 0-2 yrs entry is most Ram-friendly.",
+    )
+    hide_clearance = c3.checkbox("Hide clearance/citizenship walls", value=True,
+                                 help="Drops jobs mentioning 'US citizen', 'TS/SCI', "
+                                      "'security clearance', 'green card required'.")
+    sort_by = c4.selectbox(
+        "Sort by",
+        ["🚦 clear (reality) desc", "🚀 AI fit desc", "score desc", "newest first"],
+        index=0,
+        help="Trust 🚦 clear first — a job with high AI fit but low clear won't "
+             "survive the employer's filter.",
+    )
+
+    m1, m2 = st.columns([3, 2])
+    only_sponsors = m1.checkbox("Only ✅ H-1B sponsors", value=False)
+    hide_applied = m2.checkbox("Hide jobs I've already applied to", value=True)
+
+    # Compute the discovered_within_hours window from picked date.
+    now = datetime.utcnow()
+    day_end = datetime.combine(picked + timedelta(days=1), datetime.min.time())
+    day_start = datetime.combine(picked, datetime.min.time())
+    hours_since_end = max(0, int((now - day_end).total_seconds() // 3600))
+    hours_since_start = max(1, int((now - day_start).total_seconds() // 3600))
+
+    data = filter_feed(api_get(
+        "/jobs/", order_by="discovered",
+        discovered_within_hours=hours_since_start,
+        exclude_rejected=True, limit=3000, slim=True,
+    )) or []
+    # Filter to just the picked day's window
+    def _on_day(j):
+        d = (j.get("discovered_at") or "")[:10]
+        return d == picked.isoformat()
+    data = [j for j in data if _on_day(j)]
+
+    if hide_applied:
+        data = [j for j in data if j.get("status") != "Applied"]
+    if only_sponsors:
+        data = [j for j in data if j.get("sponsor_confirmed")]
+
+    # Max-years filter using existing helper
+    if max_yrs != "Any":
+        cap = {"0-2 yrs (entry)": 2, "≤ 3 yrs": 3, "≤ 5 yrs": 5}[max_yrs]
+        data = [j for j in data
+                if (years_required(j) is None) or (years_required(j) <= cap)]
+
+    # Citizenship / clearance filter — grep the description
+    if hide_clearance:
+        pat = re.compile(
+            r"(us\s+citizen|citizenship required|ts/sci|top secret|"
+            r"security clearance|active clearance|green\s+card required|"
+            r"must be authorized without sponsorship)",
+            re.IGNORECASE,
+        )
+        data = [j for j in data if not pat.search(
+            (j.get("description") or "") + " " + (j.get("title") or ""))]
+
+    # Bulk-pull AI scores + sort
+    ai_fit, ai_clear = _ai_score_maps()
+    def _sort_key(j):
+        jid = j.get("id")
+        if sort_by == "🚦 clear (reality) desc":
+            return (-(ai_clear.get(jid) or -1), -(ai_fit.get(jid) or 0),
+                    -(j.get("match_score") or 0))
+        if sort_by == "🚀 AI fit desc":
+            return (-(ai_fit.get(jid) or -1), -(j.get("match_score") or 0))
+        if sort_by == "score desc":
+            return (-(j.get("match_score") or 0),)
+        return ((j.get("discovered_at") or ""),)   # newest first (desc via minus? no — sorted asc, so use reverse)
+    if sort_by == "newest first":
+        data.sort(key=lambda j: j.get("discovered_at") or "", reverse=True)
+    else:
+        data.sort(key=_sort_key)
+
+    n_sp = sum(1 for j in data if j.get("sponsor_confirmed"))
+    n_ranked = sum(1 for j in data if ai_fit.get(j.get("id")) is not None)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("🗓️ Jobs on this day", len(data))
+    m2.metric("✅ H-1B sponsors", n_sp)
+    m3.metric("🚀 AI-ranked", n_ranked)
+    m4.metric("🎯 Strong 🚦 clear ≥ 70",
+              sum(1 for j in data if (ai_clear.get(j.get("id")) or 0) >= 70))
+
+    if not data:
+        st.info(f"No jobs discovered on {picked.isoformat()} in this filter set. "
+                "Try Any-years / no clearance / no sponsor gate.")
+        st.stop()
+
+    rows = [{
+        "id": j.get("id"),
+        "applied": j.get("status") == "Applied",
+        "dismiss": False,
+        "status": (j.get("status") or "")[:10],
+        "sponsor": "✅" if j.get("sponsor_confirmed") else "",
+        "score": j.get("match_score"),
+        "ai": ai_fit.get(j.get("id")),
+        "clear": ai_clear.get(j.get("id")),
+        "title": j.get("title"),
+        "company": j.get("company_name"),
+        "location": j.get("location"),
+        "posted": (j.get("posted_at") or "")[:10] or "—",
+        "discovered": (j.get("discovered_at") or "")[:16].replace("T", " "),
+        "open": apply_url(j),
+    } for j in data[:500]]  # cap at 500 for grid render sanity
+    df = pd.DataFrame(rows).set_index("id")
+    editor_key = f"db_ed_{picked.isoformat()}_{abs(hash(tuple(r['id'] for r in rows)))}"
+    grid_h = min(len(rows) + 1, 30) * 35 + 3
+    edited = st.data_editor(
+        df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
+        disabled=["status", "sponsor", "score", "ai", "clear", "title", "company",
+                  "location", "posted", "discovered", "open"],
+        column_order=["status", "sponsor", "score", "ai", "clear", "title", "company",
+                      "location", "posted", "discovered", "open", "applied", "dismiss"],
+        column_config={
+            "applied": st.column_config.CheckboxColumn(
+                "✅ Applied?", help="Tick when you've submitted."),
+            "dismiss": st.column_config.CheckboxColumn(
+                "🗑️", help="Dismiss — files to 🗑️ Deleted."),
+            "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+            "score": st.column_config.NumberColumn("score", format="%d"),
+            "discovered": st.column_config.TextColumn(
+                "discovered UTC", help="When the crawler first saw the job."),
+            **_ai_column_config(),
+        },
+    )
+    status_by_id = {j.get("id"): j.get("status") for j in data}
+    if handle_grid_edits(edited, status_by_id):
+        st.rerun()
 
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")

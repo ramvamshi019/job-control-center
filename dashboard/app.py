@@ -3270,6 +3270,53 @@ elif page == "🧠 Skills Gap":
     top_df["% of scope"] = (top_df["jobs mentioning it"] * 100 // len(data)).astype(str) + "%"
     st.dataframe(top_df, hide_index=True, use_container_width=True)
 
+    # ---- AI learning-path advisor for the top 5 gaps ----
+    st.subheader("🧠 AI learning path (top 5 gaps)")
+    st.caption("Claude suggests the fastest FREE resource + hours estimate + "
+               "a concrete portfolio project for each. Costs ~$0.02 per generation.")
+    if st.button("🎯 Get learning plan from Claude"):
+        try:
+            import anthropic
+        except ImportError:
+            st.error("anthropic SDK not installed in dashboard container.")
+            st.stop()
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not api_key:
+            st.error("ANTHROPIC_API_KEY missing from dashboard env.")
+            st.stop()
+        top5 = [(s, cnt) for s, cnt in top[:5]]
+        prompt = f"""Ram is a data engineer job-hunter on F-1 OPT. He wants to learn skills that unlock the most job postings. His current stack: python, sql, aws, etl, spark, airflow, docker.
+
+Top 5 skills he's MISSING (with # of marginal-fit jobs each would unlock):
+{chr(10).join(f'{i+1}. {s} — mentioned in {cnt} jobs' for i, (s, cnt) in enumerate(top5))}
+
+For each skill, output a markdown block:
+
+## {{skill}}
+**Unlocks:** {{count}} jobs
+**Fastest free resource:** {{specific: name + link OR search term}}
+**Time to add to resume:** {{hours, honest, 2-20h range}}
+**Portfolio project:** {{one concrete 1-line project idea that shows off this skill AND ties to Ram's data-eng background}}
+**Resume line:** {{one bullet Ram can literally add to his resume after completing the project, past tense, quantified if possible}}
+
+No fluff, no generic advice like 'read the docs'. Be specific."""
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+        client = anthropic.Anthropic(api_key=api_key)
+        with st.spinner("Claude is thinking (10-15s)..."):
+            resp = client.messages.create(
+                model=model, max_tokens=2500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            out = ""
+            for block in resp.content:
+                if getattr(block, "type", None) == "text" or hasattr(block, "text"):
+                    try:
+                        out = block.text.strip()
+                        break
+                    except AttributeError:
+                        continue
+        st.markdown(out or "(no output)")
+
     # ---- Drill-in: pick a skill, see the jobs that need it ----
     st.subheader("🔍 Drill in: pick a skill to see which jobs would open up")
     pick = st.selectbox("Skill", [s for s, _ in top], key="sg_pick")

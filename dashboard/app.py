@@ -1076,6 +1076,7 @@ elif page == "🕵️ JobRight Gap":
         rows = [{
             "id": j.get("id"),
             "applied": False,
+            "dismiss": False,
             "edge": j.get("jobright_exclusivity"),
             "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
             "score": j.get("match_score"),
@@ -1093,10 +1094,12 @@ elif page == "🕵️ JobRight Gap":
             disabled=["edge", "sponsor", "score", "title", "company", "source",
                       "location", "why", "open"],
             column_order=["edge", "sponsor", "score", "title", "company",
-                          "source", "location", "why", "open", "applied"],
+                          "source", "location", "why", "open", "applied", "dismiss"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?", help="Tick when you've applied — it's marked Applied and drops out."),
+                "dismiss": st.column_config.CheckboxColumn(
+                    "🗑️", help="Tick to dismiss — files to 🗑️ Deleted and drops it here."),
                 "edge": st.column_config.ProgressColumn(
                     "JobRight-miss", help="Confidence JobRight never showed this (higher = better edge).",
                     min_value=0, max_value=100, format="%d"),
@@ -1106,6 +1109,9 @@ elif page == "🕵️ JobRight Gap":
         )
         changed = False
         for jid, r in edited.iterrows():
+            # Delete wins over Apply — user dumping the row
+            if bool(r.get("dismiss")):
+                set_status(int(jid), "Archived"); changed = True; continue
             if bool(r["applied"]):
                 set_status(int(jid), "Applied"); changed = True
         if changed:
@@ -1802,6 +1808,7 @@ elif page == "🟢 Live Feed":
             rows = [{
                 "id": j.get("id"),
                 "applied": j.get("status") == "Applied",
+                "dismiss": False,
                 "🔴": "🔴 TODAY" if posted_today(j) else "",
                 "status": STATUS_BADGE.get(j.get("status"), j.get("status") or ""),
                 "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
@@ -1824,11 +1831,13 @@ elif page == "🟢 Live Feed":
                           "title", "company", "location", "risk", "open"],
                 column_order=["🔴", "status", "sponsor", "posted",
                               "score", "title", "company", "location", "risk",
-                              "open", "applied"],
+                              "open", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it leaves the "
                         "“Not applied yet” view and is kept (never pruned)."),
+                    "dismiss": st.column_config.CheckboxColumn(
+                        "🗑️", help="Tick to dismiss — files to 🗑️ Deleted and drops it here."),
                     "🔴": st.column_config.TextColumn(
                         "🔴", help="🔴 TODAY = the job's ORIGINAL posting date is today "
                         "(your local day), not when the crawler pulled it. Blank when the "
@@ -1844,6 +1853,9 @@ elif page == "🟢 Live Feed":
             # change (newly ticked, or un-ticked an applied one) hits the API.
             status_by_id = {j.get("id"): j.get("status") for j in subset}
             for jid, r in edited.iterrows():
+                # Delete wins over Apply — user dumping the row
+                if bool(r.get("dismiss")):
+                    set_status(int(jid), "Archived"); return True
                 want = bool(r["applied"])
                 cur = status_by_id.get(jid)
                 if want and cur != "Applied":

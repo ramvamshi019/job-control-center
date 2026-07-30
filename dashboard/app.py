@@ -628,7 +628,7 @@ page = st.sidebar.radio(
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🎯 Sponsors Watchlist", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
-     "📊 Analytics", "🧠 Skills Gap", "📬 Inbox", "🔙 Undo",
+     "📊 Analytics", "🧠 Skills Gap", "📈 Ops Health", "📬 Inbox", "🔙 Undo",
      "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
      "Applied", "🗑️ Deleted", "Rejected", "Companies", "Stats",
@@ -2636,6 +2636,93 @@ elif page == "📊 Analytics":
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         else:
             st.info("Every high-score applied job has a tracked response. Nice.")
+
+elif page == "📈 Ops Health":
+    st.header("📈 Ops Health")
+    st.caption("Lightweight observability without the Prometheus/Grafana stack. Shows the "
+               "vitals: job pipeline throughput, company crawl freshness, sponsor coverage, "
+               "top rejection reasons. Auto-refreshes on manual reload.")
+
+    # ---- backend reachable? ----
+    hlth = api_get("/health") or {}
+    if not hlth:
+        st.error("❌ Backend not reachable. Check the droplet.")
+        st.stop()
+    st.success(f"✅ Backend OK · reported: {hlth.get('status', 'ok')}")
+
+    # ---- pipeline throughput (last 24h) ----
+    st.subheader("① Job pipeline (last 24 hours)")
+    d24 = api_get("/jobs/count", discovered_within_hours=24) or {}
+    d24_ex = api_get("/jobs/count", discovered_within_hours=24, exclude_rejected=True) or {}
+    n_total = d24.get("count", 0)
+    n_survived = d24_ex.get("count", 0)
+    n_rejected = n_total - n_survived
+    reject_pct = (n_rejected * 100 // n_total) if n_total else 0
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Crawled", f"{n_total:,}")
+    m2.metric("Survived filters", f"{n_survived:,}")
+    m3.metric("Rejected", f"{n_rejected:,}", f"{reject_pct}%")
+    m4.metric("New (strong match)",
+              (api_get("/jobs/count", status="New", discovered_within_hours=24) or {}).get("count", 0))
+
+    # ---- company roster health ----
+    st.divider()
+    st.subheader("② Company roster")
+    cstats = api_get("/jobs/stats/summary") or {}
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total companies", f"{cstats.get('total_companies', 0):,}")
+    m2.metric("Active", f"{cstats.get('active_companies', 0):,}")
+    m3.metric("H-1B sponsors", f"{cstats.get('sponsors', 0):,}")
+    m4.metric("Total jobs stored", f"{cstats.get('total_jobs', 0):,}")
+
+    # By priority tier (if the API returns it)
+    if cstats.get("by_priority"):
+        st.caption("**Scan cadence tiers** — how often each priority is re-checked:")
+        pri_rows = [
+            {"tier": "high",   "companies": cstats["by_priority"].get("high", 0),
+             "scan every": "2 hrs  (12x/day)"},
+            {"tier": "medium", "companies": cstats["by_priority"].get("medium", 0),
+             "scan every": "6 hrs  (4x/day)"},
+            {"tier": "low",    "companies": cstats["by_priority"].get("low", 0),
+             "scan every": "24 hrs (1x/day)"},
+            {"tier": "skip",   "companies": cstats["by_priority"].get("skip", 0),
+             "scan every": "never (frozen)"},
+        ]
+        st.dataframe(pd.DataFrame(pri_rows), hide_index=True, use_container_width=True)
+
+    # ---- top rejection reasons ----
+    st.divider()
+    st.subheader("③ Top rejection reasons (what the filter's killing)")
+    st.caption("If some reason is much higher than expected, the filter may be misfiring. "
+               "Currently the filter drops ~99% of crawled jobs (76k/day → 800 relevant).")
+    rej = cstats.get("top_rejection_reasons") or []
+    if rej:
+        rows = [{"count": r.get("count", 0), "reason": (r.get("reason") or "")[:100]}
+                for r in rej[:12]]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    else:
+        st.info("No rejection breakdown available (/jobs/stats/summary didn't return that field).")
+
+    # ---- by-source health ----
+    st.divider()
+    st.subheader("④ Discovery by source (ATS platform)")
+    by_ats = cstats.get("by_ats") or {}
+    if by_ats:
+        top = sorted(by_ats.items(), key=lambda kv: -(kv[1] or 0))[:20]
+        st.dataframe(pd.DataFrame(top, columns=["ATS", "companies"]),
+                     hide_index=True, use_container_width=True)
+
+    # ---- freshness check ----
+    st.divider()
+    st.subheader("⑤ Freshness — 'new in last N hours' pulse")
+    cols = st.columns(4)
+    for i, hrs in enumerate([1, 6, 24, 168]):
+        c = (api_get("/jobs/count", discovered_within_hours=hrs,
+                     exclude_rejected=True) or {}).get("count", 0)
+        cols[i].metric(f"Last {hrs}h", f"{c:,}")
+
+    st.caption("If 'last 1h' shows 0 for long stretches, livewatch may be stalled. Normally "
+               "shows several hundred jobs/hour during business hours.")
 
 elif page == "🧠 Skills Gap":
     st.header("🧠 Skills Gap — what to learn next")

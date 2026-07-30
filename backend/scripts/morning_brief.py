@@ -75,6 +75,12 @@ def _stats_last_24h() -> dict:
         """), {"d": d24}).scalar()
         active_companies = c.execute(text(
             "SELECT COUNT(*) FROM companies WHERE is_active = 1")).scalar()
+        try:
+            auto_approved = c.execute(text(
+                "SELECT COUNT(*) FROM jobs WHERE status = 'Approved'"
+            )).scalar() or 0
+        except Exception:
+            auto_approved = 0
         # Recent inbox events
         try:
             interviews = c.execute(text("""
@@ -300,6 +306,7 @@ def _stats_last_24h() -> dict:
         "total_jobs": total_jobs, "crawled_24h": crawled_24h,
         "survived_24h": survived_24h, "new_24h": new_24h,
         "active_companies": active_companies,
+        "auto_approved_total": auto_approved,
         "interviews": interviews, "rejections": rejections, "acks": acks,
         "top_jobs": top, "ai_ranked": ai_ranked,
         "followups": [dict(r._mapping) for r in followups],
@@ -614,6 +621,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
       <tr><td style="padding:4px 12px;color:#666">Survived filters</td><td style="padding:4px 12px;font-weight:600">{stats['survived_24h']:,}</td></tr>
       <tr><td style="padding:4px 12px;color:#666">Strong 'New' matches</td><td style="padding:4px 12px;font-weight:600">{stats['new_24h']}</td></tr>
       <tr><td style="padding:4px 12px;color:#666">Active companies</td><td style="padding:4px 12px;font-weight:600">{stats['active_companies']:,}</td></tr>
+      <tr><td style="padding:4px 12px;color:#666">✅ Auto-approved (AI ≥90)</td><td style="padding:4px 12px;font-weight:600;color:#1a7f37">{stats.get('auto_approved_total', 0)}</td></tr>
     </table>
     <h3>📬 Inbox activity</h3>
     <table style="border-collapse:collapse;font-size:14px">

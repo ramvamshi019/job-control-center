@@ -227,8 +227,35 @@ def run() -> dict:
             continue
         _store(j["id"], result)
         ranked += 1
-    log.info("ai_rank_queue: ranked=%d failed=%d", ranked, failed)
-    return {"ranked": ranked, "failed": failed}
+
+    # Auto-Approve pass: any job Claude scored >= 85 AND currently 'New'
+    # AND at a sponsor gets promoted to 'Approved'. Signal: "Claude is
+    # highly confident this is a top pick." Ram wakes up with a pre-vetted
+    # queue on the 🎯 Approved page. Reversible via Undo.
+    #
+    # Bar was 90 initially but Sonnet with the extended field set (salary
+    # etc) rarely hits >=90 on data-eng roles — 85 is still 3-4 sigma from
+    # the median score and produces a small, high-signal pool.
+    autoapp = 0
+    try:
+        with engine.begin() as c:
+            res = c.execute(text("""
+                UPDATE jobs SET status = 'Approved', updated_at = :ts
+                WHERE id IN (
+                    SELECT j.id FROM jobs j
+                    JOIN job_ai_ranking r ON r.job_id = j.id
+                    LEFT JOIN companies co ON co.id = j.company_id
+                    WHERE j.status = 'New'
+                      AND r.fit_score >= 85
+                      AND COALESCE(co.h1b_history_score, 0) >= 60
+                )
+            """), {"ts": utcnow_naive()})
+            autoapp = res.rowcount or 0
+    except Exception as e:  # noqa: BLE001
+        log.warning("auto-approve failed: %s", e)
+    log.info("ai_rank_queue: ranked=%d failed=%d auto_approved=%d",
+             ranked, failed, autoapp)
+    return {"ranked": ranked, "failed": failed, "auto_approved": autoapp}
 
 
 if __name__ == "__main__":

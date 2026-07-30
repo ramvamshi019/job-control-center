@@ -2093,6 +2093,7 @@ elif page == "⚡ Fast Apply":
         rows = [{
             "id": j.get("id"),
             "applied": j.get("status") == "Applied",
+            "delete": False,
             "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
             "score": j.get("match_score"),
             "ai": ai_map.get(j.get("id")),
@@ -2108,10 +2109,13 @@ elif page == "⚡ Fast Apply":
             hide_index=True, use_container_width=True,
             disabled=["sponsor", "score", "ai", "title", "company", "location", "ats", "open"],
             column_order=["sponsor", "score", "ai", "title", "company", "location",
-                          "ats", "open", "applied"],
+                          "ats", "open", "applied", "delete"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?", help="Tick once you've actually submitted."),
+                "delete": st.column_config.CheckboxColumn(
+                    "🗑️", help="Tick to dismiss — files under 🗑️ Deleted and "
+                              "drops from every discovery view. Reversible via Undo."),
                 "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                 "score": st.column_config.NumberColumn("score", format="%d"),
                 "ai": st.column_config.NumberColumn(
@@ -2122,6 +2126,10 @@ elif page == "⚡ Fast Apply":
         )
         status_by_id = {j.get("id"): j.get("status") for j in queue}
         for jid, r in edited.iterrows():
+            # Delete wins over Applied — if both are ticked the user is dumping the row.
+            if bool(r.get("delete")):
+                set_status(int(jid), "Archived")
+                st.rerun()
             if bool(r["applied"]) and status_by_id.get(jid) != "Applied":
                 set_status(int(jid), "Applied")
                 st.rerun()

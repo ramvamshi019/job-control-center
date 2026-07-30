@@ -1,0 +1,30 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
+      # Install backend deps + pytest itself
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      # Compile-check the dashboard even though it's not tested directly --
+      # syntax errors in dashboard/app.py have shipped to prod during the
+      # marathon session and would be caught here.
+      - name: Syntax-check dashboard
+        run: python -m py_compile dashboard/app.py
+      # The actual test suite
+      - name: Run pytest
+        run: cd backend && python -m pytest tests/ -v --tb=short

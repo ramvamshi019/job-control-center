@@ -43,10 +43,18 @@ BACKEND_SPARING = DATA_ROLE_SIGNALS + [
 # Off-domain SPECIALTIES that aren't a Python/SQL/Spark data-or-backend fit. These
 # pass the tech-title gate but should rank well below your real lane (de-ranked,
 # not excluded, so a "Full Stack" role with backend still survives).
+# 2026-07-30: Added security/network/QA/systems/site-reliability after
+# filter_sanity_check found 73% false-positive rate — Ram's queue was full of
+# Product Security Engineer, Network Engineer, QA Engineer, Runtime Systems
+# Engineer that all passed the tech-title gate but aren't data-eng roles.
 OFF_DOMAIN_SIGNALS = [
     "front end", "frontend", "front-end", "ui engineer", "ux engineer",
     "ios", "android", "mobile", "game", "gameplay", "embedded", "firmware",
     "hardware", "fpga", "asic", "mechanical", "electrical", "rf engineer",
+    "security engineer", "application security", "cybersecurity", "cyber security",
+    "information security", "product security", "network engineer",
+    "qa engineer", "quality assurance engineer", "test engineer", "test automation",
+    "sdet", "systems engineer", "runtime", "site reliability", "sre engineer",
 ]
 
 # HARD WRONG-SUBROLE: titles that CONTAIN a target keyword but are actually a

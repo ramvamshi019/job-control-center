@@ -176,6 +176,49 @@ def _stats_last_24h() -> dict:
         except Exception:
             total_waiting = 0
 
+        # Sunday-only extras: 4-week app trend, response rate, best company
+        is_sunday = now.weekday() == 6   # Monday=0, Sunday=6
+        weekly = None
+        if is_sunday:
+            try:
+                d14 = now - timedelta(days=14)
+                d21 = now - timedelta(days=21)
+                d28 = now - timedelta(days=28)
+                apps_w1 = c.execute(text(
+                    "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :a AND updated_at < :b"
+                ), {"a": d7, "b": now}).scalar() or 0
+                apps_w2 = c.execute(text(
+                    "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :a AND updated_at < :b"
+                ), {"a": d14, "b": d7}).scalar() or 0
+                apps_w3 = c.execute(text(
+                    "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :a AND updated_at < :b"
+                ), {"a": d21, "b": d14}).scalar() or 0
+                apps_w4 = c.execute(text(
+                    "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :a AND updated_at < :b"
+                ), {"a": d28, "b": d21}).scalar() or 0
+                # response rate over last 28d
+                apps_28d = c.execute(text(
+                    "SELECT COUNT(*) FROM jobs WHERE status='Applied' AND updated_at >= :d"
+                ), {"d": d28}).scalar() or 0
+                resp_28d = c.execute(text(
+                    "SELECT COUNT(DISTINCT job_id) FROM job_messages WHERE received_at >= :d"
+                ), {"d": d28}).scalar() or 0
+                resp_pct = round(100 * resp_28d / apps_28d, 1) if apps_28d else 0
+                # Best company this week (most jobs Ram touched at score threshold)
+                best_co = c.execute(text("""
+                    SELECT company_name, COUNT(*) FROM jobs
+                    WHERE discovered_at >= :d AND status IN ('New', 'Approved')
+                    GROUP BY company_name ORDER BY 2 DESC LIMIT 3
+                """), {"d": d7}).all()
+                weekly = {
+                    "apps": [apps_w4, apps_w3, apps_w2, apps_w1],
+                    "resp_pct": resp_pct,
+                    "apps_28d": apps_28d, "resp_28d": resp_28d,
+                    "best_companies_this_week": [(r[0], r[1]) for r in best_co],
+                }
+            except Exception:
+                weekly = None
+
         # Hot Hiring: sponsor companies with tech relevance. Filter to
         # companies where fresh jobs count = only jobs that PASSED the
         # scoring filter (status IN 'New'/'Need Review'), so Davita's 900
@@ -314,6 +357,7 @@ def _stats_last_24h() -> dict:
         "ghosted_total": ghosted_total,
         "new_ghosts": new_ghosts,
         "hot_hire": [dict(r._mapping) for r in hot_hire],
+        "weekly": weekly,
         "filter_sanity": {
             "keep_rows": [dict(r._mapping) for r in keep_rows],
             "sampled": fs_total,
@@ -434,6 +478,23 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             plain.append(f"  [{f['days_stale']}d, score {f['match_score']}] {f['title']} @ {f['company_name']}")
             plain.append(f"      {f['job_url']}")
         plain.append("")
+    wk = stats.get("weekly")
+    if wk:
+        plain.append("-- 📊 Sunday weekly review (4-week trend) --")
+        # ASCII bars: normalize apps by max
+        apps = wk["apps"]
+        mx = max(apps) or 1
+        labels = ["4w ago", "3w ago", "2w ago", "last wk"]
+        for lbl, n in zip(labels, apps):
+            bar = "█" * int(n * 20 / mx) if n else ""
+            plain.append(f"  {lbl:8s} {n:3d}  {bar}")
+        plain.append(f"  Response rate (28d): {wk['resp_28d']}/{wk['apps_28d']} = {wk['resp_pct']}%")
+        if wk.get("best_companies_this_week"):
+            plain.append("  Companies with most new/approved jobs this week:")
+            for co, n in wk["best_companies_this_week"]:
+                plain.append(f"    - {co}: {n}")
+        plain.append("")
+
     hot = stats.get("hot_hire") or []
     if hot:
         plain.append(f"-- 🔥 Hot hiring — sponsors with 3+ fresh jobs this week --")
@@ -523,8 +584,34 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             f"<table style='border-collapse:collapse;width:100%;font-size:14px'>{fup_rows}</table>"
         )
 
-    hot = stats.get("hot_hire") or []
-    hot_html = ""
+    wk = stats.get("weekly")
+    wk_html = ""
+    if wk:
+        apps = wk["apps"]
+        mx = max(apps) or 1
+        # Simple horizontal bar chart in HTML
+        labels = ["4w ago", "3w ago", "2w ago", "last wk"]
+        bars = "".join(
+            f"<tr>"
+            f"<td style='padding:4px 12px;color:#666;width:80px'>{lbl}</td>"
+            f"<td style='padding:4px 12px;font-weight:600;width:40px;text-align:right'>{n}</td>"
+            f"<td style='padding:4px 12px;width:100%'>"
+            f"<div style='background:#3730a3;height:14px;width:{int(n * 100 / mx) if n else 0}%;"
+            f"border-radius:2px'></div></td></tr>"
+            for lbl, n in zip(labels, apps)
+        )
+        cos = wk.get("best_companies_this_week") or []
+        cos_line = ("<p style='margin:8px 0 0 0;font-size:13px;color:#666'>"
+                    "This week's hottest activity: " +
+                    ", ".join(f"<b>{co}</b> ({n})" for co, n in cos) + "</p>") if cos else ""
+        wk_html = (
+            f"<h3>📊 Sunday review — 4-week apply trend</h3>"
+            f"<table style='border-collapse:collapse;width:100%;font-size:14px'>{bars}</table>"
+            f"<p style='margin:8px 0 0 0;font-size:13px;color:#666'>"
+            f"Response rate (28d): <b>{wk['resp_28d']}/{wk['apps_28d']}</b> "
+            f"= <b>{wk['resp_pct']}%</b></p>{cos_line}"
+        )
+
     if hot:
         rows_html = "".join(
             f"<tr>"
@@ -632,6 +719,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     </table>
     <h3>{top_heading}</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">{top_html or '<tr><td>No new sponsor jobs in the last 24h — check ⚡ Fast Apply for the backlog.</td></tr>'}</table>
+    {wk_html}
     {fup_html}
     {hot_html}
     {fs_html}

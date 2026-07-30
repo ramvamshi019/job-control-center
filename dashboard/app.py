@@ -1575,6 +1575,18 @@ elif page == "📆 Last 24 Hours":
             st.info("Nothing surviving filters in the last 24h. Check the crawler is running.")
             return
 
+        # Bulk-pull AI ranker data once per page render so every experience
+        # section shares the same map. Maps job_id → (fit_score, clear_odds).
+        # Blank cells = job not yet AI-ranked (ranker only covers ~40/night).
+        ai_fit, ai_clear = {}, {}
+        try:
+            _ai = api_get("/ai_rank/queue", limit=200) or {}
+            for it in _ai.get("items") or []:
+                ai_fit[it["id"]] = it.get("fit_score")
+                ai_clear[it["id"]] = it.get("clear_odds")
+        except Exception:
+            pass
+
         def render_24h_section(subset, key_prefix):
             rows = [{
                 "id": j.get("id"),
@@ -1584,6 +1596,8 @@ elif page == "📆 Last 24 Hours":
                 "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
                 "posted": (j.get("posted_at") or "")[:10] or ("~" + (j.get("discovered_at") or "")[:10]),
                 "score": j.get("match_score"),
+                "ai": ai_fit.get(j.get("id")),
+                "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
                 "company": j.get("company_name"),
                 "location": j.get("location"),
@@ -1595,10 +1609,11 @@ elif page == "📆 Last 24 Hours":
             editor_key = f"h24_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-                disabled=["status", "sponsor", "posted", "score", "title", "company",
-                          "location", "risk", "open"],
-                column_order=["status", "sponsor", "posted", "score", "title",
-                              "company", "location", "risk", "open", "applied", "dismiss"],
+                disabled=["status", "sponsor", "posted", "score", "ai", "clear",
+                          "title", "company", "location", "risk", "open"],
+                column_order=["status", "sponsor", "posted", "score", "ai", "clear",
+                              "title", "company", "location", "risk", "open",
+                              "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — kept, never pruned."),
@@ -1608,6 +1623,14 @@ elif page == "📆 Last 24 Hours":
                         "posted", help="Real posting date (or ~first-seen if source hides date)."),
                     "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                     "score": st.column_config.NumberColumn("score", format="%d"),
+                    "ai": st.column_config.NumberColumn(
+                        "🚀 AI", format="%d",
+                        help="Claude fit-score (skills match). Blank = not yet ranked."),
+                    "clear": st.column_config.NumberColumn(
+                        "🚦 clear", format="%d",
+                        help="Reality-check: odds you clear the employer's actual filter "
+                             "(OSS/seniority/clearance/etc). Trust this over 'AI' — a high "
+                             "AI + low clear = don't waste a tailoring."),
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}

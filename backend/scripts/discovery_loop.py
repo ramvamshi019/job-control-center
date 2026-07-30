@@ -43,6 +43,7 @@ log = get_logger("discovery_loop")
 JOB_STORIES_EVERY   = int(os.environ.get("DISC_JOBSTORIES_EVERY_S",  60 * 10))       # 10 min
 HN_HIRING_EVERY     = int(os.environ.get("DISC_HN_HIRING_EVERY_S",   60 * 60 * 6))   # 6 hrs
 YC_EVERY            = int(os.environ.get("DISC_YC_EVERY_S",          60 * 60 * 24))  # 24 hrs
+VC_EVERY            = int(os.environ.get("DISC_VC_EVERY_S",           60 * 60 * 24 * 2))  # 48 hrs
 HARVEST_EVERY       = int(os.environ.get("DISC_HARVEST_EVERY_S",     60 * 60 * 24 * 7))  # 7 days
 GMAIL_EVERY         = int(os.environ.get("DISC_GMAIL_EVERY_S",       60 * 15))       # 15 min
 NOTIFY_EVERY        = int(os.environ.get("DISC_NOTIFY_EVERY_S",      60 * 15))       # 15 min -- email digest of top new sponsor jobs
@@ -79,6 +80,7 @@ def main() -> int:
         "job_stories": now,
         "hn_hiring":   now,
         "yc":          now,
+        "vc":          now + 30,  # small delay so YC + VC seeders don't stampede the DB
         "harvest":     now,
         "gmail":       now,
         "notify":      now + 60,  # slight delay so first tick doesn't fire on stale DB
@@ -102,6 +104,11 @@ def main() -> int:
         if _due("yc"):
             _safe_run("YC directory", _yc_directory)
             next_run["yc"] = time.time() + YC_EVERY
+
+        # 3b. VC portfolio bulk-seed (YC recent batches + TC funding feed)
+        if _due("vc"):
+            _safe_run("VC portfolios", _vc_portfolios)
+            next_run["vc"] = time.time() + VC_EVERY
 
         # 4. Weekly heavy harvest (existing pipeline)
         if _due("harvest"):
@@ -138,6 +145,14 @@ def _hn_who_is_hiring():
 def _yc_directory():
     from seed_yc_directory import run
     return run(workers=6)
+
+
+def _vc_portfolios():
+    """Bulk-seed recent YC batches + TechCrunch funding announcements.
+    Companies get inserted as dormant; auto_discover fingerprints them
+    into an ATS on the next weekly harvest pass."""
+    from seed_vc_portfolios import run
+    return run()
 
 
 def _gmail_watch():

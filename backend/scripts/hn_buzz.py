@@ -52,22 +52,34 @@ def _ensure_table() -> None:
         """))
 
 
-def _top5_companies() -> list[str]:
-    """Pull distinct companies from tonight's AI top-5 (yesterday's backlog)."""
+def _top_companies(limit: int = 10) -> list[str]:
+    """Pull top-N distinct companies from tonight's AI-ranked pool.
+    Was 5; bumped to 10 so more of Ram's queue gets interview material.
+    Fallback: any AI-ranked pool if the 24-48h window is empty."""
     now = utcnow_naive()
     d24 = now - timedelta(hours=24)
     d48 = now - timedelta(hours=48)
     with engine.connect() as c:
         try:
             rows = c.execute(text("""
-                SELECT DISTINCT j.company_name
+                SELECT j.company_name, MAX(r.fit_score) AS best_fit
                 FROM job_ai_ranking r
                 JOIN jobs j ON j.id = r.job_id
                 WHERE j.discovered_at >= :d48 AND j.discovered_at < :d24
-                  AND j.status IN ('New', 'Need Review')
-                ORDER BY r.fit_score DESC
-                LIMIT 5
-            """), {"d24": d24, "d48": d48}).all()
+                  AND j.status IN ('New', 'Need Review', 'Approved')
+                GROUP BY j.company_name
+                ORDER BY best_fit DESC
+                LIMIT :n
+            """), {"d24": d24, "d48": d48, "n": limit}).all()
+            if not rows:
+                # First-morning fallback: any ranked companies
+                rows = c.execute(text("""
+                    SELECT j.company_name, MAX(r.fit_score) AS best_fit
+                    FROM job_ai_ranking r
+                    JOIN jobs j ON j.id = r.job_id
+                    GROUP BY j.company_name
+                    ORDER BY best_fit DESC LIMIT :n
+                """), {"n": limit}).all()
         except Exception:
             return []
     return [r[0] for r in rows if r[0]]
@@ -128,7 +140,7 @@ def _store(company: str, mentions: list[dict], total: int) -> None:
 
 def run() -> dict:
     _ensure_table()
-    companies = _top5_companies()
+    companies = _top_companies(10)
     log.info("hn_buzz: fetching for %d companies", len(companies))
     if not companies:
         return {"companies": 0}

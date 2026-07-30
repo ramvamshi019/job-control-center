@@ -142,6 +142,8 @@ def _stats_last_24h() -> dict:
         # 7d ago beats a weak-fit from 30d. LEFT JOIN drops any job that has
         # gotten a message in job_messages (recruiter response of any kind).
         d7 = now - timedelta(days=7)
+        # Follow-up = Applied 7-30d ago, no reply. Ghosted (>30d) excluded
+        # from the top-5 so Ram focuses energy where it can still land.
         try:
             followups = c.execute(text("""
                 SELECT j.id, j.title, j.company_name, j.location, j.job_url,
@@ -151,10 +153,11 @@ def _stats_last_24h() -> dict:
                 LEFT JOIN job_messages m ON m.job_id = j.id
                 WHERE j.status = 'Applied'
                   AND j.updated_at < :d7
+                  AND j.updated_at >= :d30
                   AND m.id IS NULL
-                ORDER BY (j.match_score + MIN(CAST(julianday(:now) - julianday(j.updated_at) AS INTEGER), 30)) DESC
+                ORDER BY (j.match_score + CAST(julianday(:now) - julianday(j.updated_at) AS INTEGER)) DESC
                 LIMIT 5
-            """), {"now": now, "d7": d7}).all()
+            """), {"now": now, "d7": d7, "d30": now - timedelta(days=30)}).all()
         except Exception:
             followups = []
         # Total waiting count for the header line
@@ -166,6 +169,26 @@ def _stats_last_24h() -> dict:
             """), {"d7": d7}).scalar() or 0
         except Exception:
             total_waiting = 0
+
+        # Ghosted: Applied >30d, no message. Signal to move on emotionally
+        # (and to stop wasting follow-up energy).
+        d30 = now - timedelta(days=30)
+        try:
+            ghosted_total = c.execute(text("""
+                SELECT COUNT(*) FROM jobs j
+                LEFT JOIN job_messages m ON m.job_id = j.id
+                WHERE j.status = 'Applied' AND j.updated_at < :d30 AND m.id IS NULL
+            """), {"d30": d30}).scalar() or 0
+            # New ghosts this week: applied >30d ago AND updated_at fell into
+            # ghosted territory sometime in the last 7 days.
+            new_ghosts = c.execute(text("""
+                SELECT COUNT(*) FROM jobs j
+                LEFT JOIN job_messages m ON m.job_id = j.id
+                WHERE j.status = 'Applied' AND m.id IS NULL
+                  AND j.updated_at >= :d37 AND j.updated_at < :d30
+            """), {"d30": d30, "d37": now - timedelta(days=37)}).scalar() or 0
+        except Exception:
+            ghosted_total = new_ghosts = 0
 
         # Filter sanity: two-sided sampling (populated by filter_sanity_check.py
         # at 05:15 UTC). Rejected-pool 'keep' = false-negative; accepted-pool
@@ -256,6 +279,8 @@ def _stats_last_24h() -> dict:
         "top_jobs": top, "ai_ranked": ai_ranked,
         "followups": [dict(r._mapping) for r in followups],
         "total_waiting": total_waiting,
+        "ghosted_total": ghosted_total,
+        "new_ghosts": new_ghosts,
         "filter_sanity": {
             "keep_rows": [dict(r._mapping) for r in keep_rows],
             "sampled": fs_total,
@@ -355,6 +380,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
         f"  🎯 Interviews:  {stats['interviews']}",
         f"  ❌ Rejections:  {stats['rejections']} (auto-moved to Rejected page)",
         f"  📥 Acks:        {stats['acks']}",
+        f"  👻 Ghosted:     {stats.get('ghosted_total', 0)} total ({stats.get('new_ghosts', 0)} new this week)",
         "",
         f"-- Top 5 {'AI-ranked' if stats.get('ai_ranked') else 'heuristic'} sponsor jobs to attack first --",
     ]
@@ -539,6 +565,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
       <tr><td style="padding:4px 12px;color:#666">🎯 Interviews</td><td style="padding:4px 12px;font-weight:600;color:#1a7f37">{stats['interviews']}</td></tr>
       <tr><td style="padding:4px 12px;color:#666">❌ Rejections (auto-moved)</td><td style="padding:4px 12px;font-weight:600;color:#b91c1c">{stats['rejections']}</td></tr>
       <tr><td style="padding:4px 12px;color:#666">📥 Acks</td><td style="padding:4px 12px;font-weight:600">{stats['acks']}</td></tr>
+      <tr><td style="padding:4px 12px;color:#666">👻 Ghosted (>30d silent)</td><td style="padding:4px 12px;font-weight:600;color:#6b7280">{stats.get('ghosted_total', 0)} <span style="font-size:12px;color:#999">(+{stats.get('new_ghosts', 0)} this week)</span></td></tr>
     </table>
     <h3>{top_heading}</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">{top_html or '<tr><td>No new sponsor jobs in the last 24h — check ⚡ Fast Apply for the backlog.</td></tr>'}</table>

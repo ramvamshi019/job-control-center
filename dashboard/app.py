@@ -2868,7 +2868,19 @@ Not generic — tied to something the JD mentions. Ex: 'You mentioned migrating 
                     max_tokens=2500,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                out = resp.content[0].text
+                # Sonnet 5 with extended thinking returns ThinkingBlock(s)
+                # before the TextBlock. Skip anything without .text.
+                out = ""
+                for block in resp.content:
+                    if hasattr(block, "text"):
+                        try:
+                            out = block.text
+                            break
+                        except AttributeError:
+                            continue
+                if not out:
+                    st.error("Claude returned no text content. Try again.")
+                    st.stop()
             except Exception as e:  # noqa: BLE001
                 st.error(f"Anthropic API call failed: {e}")
                 st.stop()

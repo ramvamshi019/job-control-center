@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 20
     user_agent: str = "JobControlCenter/1.0 (+personal-job-search)"
 
+    # --- Scheduler intervals (hours between re-checks per priority tier) ---
+    # Previously hardcoded in scheduler.py -- surfaced here so ops can tune
+    # without a code change. See scheduler.PRIORITY_INTERVALS for details on
+    # what "high"/"medium"/"low" mean and the capacity math behind these
+    # numbers. Env overrides: SCAN_HIGH_HOURS / SCAN_MEDIUM_HOURS / SCAN_LOW_HOURS.
+    scan_high_hours: float = 2.0    # confirmed-sponsor / good-fit watchlist
+    scan_medium_hours: float = 6.0  # unconfirmed but interesting
+    scan_low_hours: float = 24.0    # long tail (must re-check daily)
+
     # --- Scoring ---
     # Canonical New/Best routing threshold. This in-code default is the single
     # source of truth; .env may override. (Was 75; lowered to 50 — see .env.)

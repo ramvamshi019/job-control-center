@@ -61,10 +61,13 @@ PRIORITY_INTERVALS = {
     # for high (+ 33k low + 0.8k medium = 90k/day total) vs measured ceiling
     # ~120-150k/day. Halves the lag from post -> Posted Today on the sponsor
     # watchlist, which is what actually matters for a job search in flight.
-    "high": timedelta(hours=2),      # confirmed-sponsor / good-fit watchlist
-    "medium": timedelta(hours=6),
-    "low": timedelta(hours=24),
-    "skip": None,  # never
+    #
+    # Values sourced from settings so ops can tune from .env without editing
+    # code. Defaults preserve the tuned production numbers documented above.
+    "high":   timedelta(hours=settings.scan_high_hours),
+    "medium": timedelta(hours=settings.scan_medium_hours),
+    "low":    timedelta(hours=settings.scan_low_hours),
+    "skip":   None,  # never
 }
 
 # Lower = serviced first. Ensures watchlist re-checks beat the long-tail backlog.

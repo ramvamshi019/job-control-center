@@ -572,7 +572,14 @@ def _dedup_key(job: dict) -> tuple:
     across Greenhouse/LinkedIn/Indeed is almost always the SAME posting."""
     def _norm(s: str) -> str:
         return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
-    company = _norm(job.get("company_name") or "")
+    # Strip corporate suffixes (Inc/LLC/Corp/etc.) so "Stripe" and
+    # "Stripe, Inc." collapse to the same key. Do this BEFORE _norm which
+    # removes punctuation.
+    company_raw = (job.get("company_name") or "").lower()
+    company_raw = re.sub(
+        r"\b(inc|incorporated|corp|corporation|llc|l\.l\.c\.?|ltd|limited|"
+        r"company|co|holdings|group|plc|pbc|the)\b\.?", " ", company_raw)
+    company = _norm(company_raw)
     # Title with level words stripped so "Senior Software Engineer II" and
     # "Software Engineer" don't collapse but "Software Engineer" from two
     # sources DO collapse.

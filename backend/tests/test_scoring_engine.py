@@ -84,3 +84,51 @@ def test_totally_off_target_scores_low():
     s = _score(title="Registered Nurse",
                description="Direct patient care in ICU setting.")
     assert s < 30
+
+
+# ---- OFF-DOMAIN TITLE REGRESSION LOCK (added 2026-07-30) ---------------
+# filter_sanity_check v2 caught these titles slipping through the New
+# threshold at 73% false-positive rate. The scoring engine now flags them
+# as OFF_DOMAIN (-20 penalty) unless BACKEND_SPARING signals also match.
+# These tests lock the fix.
+
+def test_product_security_engineer_ranks_below_data_engineer():
+    de = _score(title="Data Engineer",
+                description="Build ETL with Python, SQL, Spark, Airflow.")
+    sec = _score(title="Product Security Engineer",
+                 description="Design and implement security controls, incident response, penetration testing.")
+    assert sec < de - 15, f"security engineer ({sec}) should be well below DE ({de})"
+
+
+def test_network_engineer_ranks_below_data_engineer():
+    de = _score(title="Data Engineer",
+                description="Build ETL with Python, SQL, Spark, Airflow.")
+    net = _score(title="Network Engineer",
+                 description="Configure Cisco routers, BGP peering, network diagnostics.")
+    assert net < de - 15
+
+
+def test_qa_engineer_ranks_below_data_engineer():
+    de = _score(title="Data Engineer",
+                description="Build ETL with Python, SQL, Spark, Airflow.")
+    qa = _score(title="QA Engineer",
+                description="Manual and automated testing of web applications, bug tracking.")
+    assert qa < de - 15
+
+
+def test_runtime_systems_engineer_ranks_below_data_engineer():
+    de = _score(title="Data Engineer",
+                description="Build ETL with Python, SQL, Spark, Airflow.")
+    rt = _score(title="Software Engineer, Runtime",
+                description="Low-level Go and C++ runtime performance work.")
+    assert rt < de - 10
+
+
+def test_cloud_platform_security_still_scores_normally():
+    """BACKEND_SPARING should exempt hybrid titles that combine cloud/platform
+    with security — the off-domain penalty shouldn't fire for these."""
+    hybrid = _score(title="Cloud Platform Security Engineer",
+                    description="Design AWS security controls for platform services. Python, Terraform.")
+    # Not an OFF_DOMAIN hit because "cloud" and "platform" are in BACKEND_SPARING.
+    # Score should be respectable (>=20) — not the -20 penalty case.
+    assert hybrid >= 20

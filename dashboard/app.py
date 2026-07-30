@@ -577,7 +577,8 @@ page = st.sidebar.radio(
      "🔥 Fresh (apply now)",
      "🕵️ JobRight Gap", "🎯 Sponsors Watchlist", "🔴 Posted Today", "📆 Last 24 Hours",
      "📅 Posted This Week", "🟢 Live Feed", "Today's Best Jobs",
-     "📊 Analytics", "📬 Inbox", "🔙 Undo", "⚙️ Gmail Settings", "❄️ Frozen Companies",
+     "📊 Analytics", "🧠 Skills Gap", "📬 Inbox", "🔙 Undo",
+     "⚙️ Gmail Settings", "❄️ Frozen Companies",
      "Need Review", "Approved",
      "Applied", "🗑️ Deleted", "Rejected", "Companies", "Stats",
      "📋 Daily Audit"],
@@ -2565,6 +2566,148 @@ elif page == "📊 Analytics":
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         else:
             st.info("Every high-score applied job has a tracked response. Nice.")
+
+elif page == "🧠 Skills Gap":
+    st.header("🧠 Skills Gap — what to learn next")
+    st.caption("For every job you scored **just below the 'strong match' threshold** "
+               "(marginal), this parses the JD for the tech skills that show up most "
+               "and that YOU don't already have on your resume. Actionable: the skill "
+               "at the top of the list, if you added it, would unlock the most new matches.")
+
+    c1, c2, c3 = st.columns(3)
+    lo = c1.slider("Score range low", 0, 90, 20, step=5, key="sg_lo",
+                    help="Ignore junk-tier below this score.")
+    hi = c2.slider("Score range high", 5, 100, 60, step=5, key="sg_hi",
+                    help="Focus on marginal jobs -- close-to-fit ones that a skill or two "
+                         "could push above the strong-match threshold (usually 50-60).")
+    max_days = c3.slider("Discovered within N days", 1, 60, 30, step=1, key="sg_days")
+    if hi <= lo:
+        st.warning("Score range high must be > low.")
+        st.stop()
+
+    # Pull FULL (non-slim) job data so we have descriptions to scan.
+    with st.spinner("Fetching jobs + parsing skills..."):
+        data = filter_feed(api_get(
+            "/jobs/", min_score=lo, exclude_rejected=True, order_by="score",
+            limit=3000, discovered_within_hours=max_days * 24,
+        ))
+        data = [j for j in data if (j.get("match_score") or 0) < hi]
+
+    st.metric("Marginal-match jobs in scope", len(data))
+    if not data:
+        st.info("No marginal jobs in this range. Widen the score/day sliders above.")
+        st.stop()
+
+    # ---- User's current skills (from resume profile) ----
+    prof = my_profile()
+    # profile shape may be dict or None; look for 'skills' key, else pull from raw
+    my_skills_raw = prof.get("skills") if isinstance(prof, dict) else []
+    if not my_skills_raw:
+        # Fallback: use a reasonable default reflecting Ram's data-eng focus
+        my_skills_raw = ["python", "sql", "aws", "azure", "spark", "pyspark",
+                         "airflow", "dbt", "kafka", "snowflake", "docker",
+                         "kubernetes", "terraform", "postgresql", "databricks"]
+    my_skills = {s.strip().lower() for s in my_skills_raw if s and s.strip()}
+
+    with st.expander(f"Your current skills ({len(my_skills)})", expanded=False):
+        st.write(", ".join(sorted(my_skills)))
+
+    # ---- The skill vocabulary to scan for ----
+    # Curated data/cloud/ML/infra terms. Add here to widen coverage.
+    KNOWN_SKILLS = [
+        # Data engineering / warehousing / lake
+        "snowflake", "databricks", "bigquery", "redshift", "synapse", "clickhouse",
+        "iceberg", "delta lake", "hudi", "duckdb",
+        # Orchestration
+        "airflow", "dagster", "prefect", "luigi", "step functions",
+        # Stream / message
+        "kafka", "kinesis", "pulsar", "flink", "spark streaming", "beam",
+        # ETL / transformation
+        "dbt", "fivetran", "airbyte", "singer", "stitch", "matillion",
+        # Compute
+        "spark", "pyspark", "hadoop", "hive", "presto", "trino", "athena",
+        # Cloud
+        "aws", "azure", "gcp", "google cloud", "s3", "emr", "glue", "lambda",
+        "sagemaker", "vertex ai", "adf", "data factory", "dataproc",
+        # Container / infra
+        "docker", "kubernetes", "helm", "terraform", "pulumi", "ansible",
+        "jenkins", "circleci", "github actions", "gitlab ci",
+        # Data stores
+        "postgresql", "mysql", "sql server", "oracle", "mongodb", "cassandra",
+        "redis", "elasticsearch", "dynamodb", "cockroachdb",
+        # Languages
+        "python", "java", "scala", "go", "rust", "typescript", "javascript",
+        "r ", "julia",  # trailing space on "r" to avoid matching "sr"
+        # ML / AI
+        "pytorch", "tensorflow", "sklearn", "scikit-learn", "xgboost", "lightgbm",
+        "huggingface", "langchain", "openai", "anthropic", "mlflow", "kubeflow",
+        "vector database", "pinecone", "weaviate", "chroma", "faiss",
+        # BI / vis
+        "tableau", "power bi", "looker", "metabase", "superset", "grafana",
+        # Observability / ops
+        "prometheus", "datadog", "splunk", "new relic", "sentry",
+        # API / backend
+        "fastapi", "flask", "django", "express", "node.js", "graphql", "grpc",
+        # Misc
+        "kafka connect", "great expectations", "monte carlo", "collibra",
+        "informatica", "talend", "ssis", "sas", "cognos",
+    ]
+
+    # Compile ONE regex for all skills (longest-first so 'spark streaming' wins
+    # over 'spark'). Word-boundary style so 'r' doesn't match everywhere.
+    alts = "|".join(re.escape(s) for s in sorted(KNOWN_SKILLS, key=len, reverse=True))
+    skill_re = re.compile(r"(?<![a-z0-9])(" + alts + r")(?![a-z0-9])", re.I)
+
+    # ---- Scan every marginal job's description ----
+    from collections import Counter
+    counts: Counter = Counter()
+    per_skill_jobs: dict[str, list] = {}
+    for j in data:
+        desc = (j.get("description") or "").lower()
+        if not desc: continue
+        found = set(m.group(1).lower().strip() for m in skill_re.finditer(desc))
+        # Skills you DON'T have
+        gaps = found - my_skills
+        for g in gaps:
+            counts[g] += 1
+            per_skill_jobs.setdefault(g, []).append(j)
+
+    if not counts:
+        st.success("No skill gaps detected in this range — every marginal job's required "
+                   "skills are already in your profile. The blocker isn't skills, it's "
+                   "score. Try widening the score-range window.")
+        st.stop()
+
+    # ---- The top-10 gaps ----
+    st.subheader(f"🎯 Top skills you're missing (from {len(data)} marginal jobs)")
+    st.caption("Ranked by how many marginal-match jobs mention the skill AND you don't "
+               "have it. Adding the top one would unlock the most postings.")
+    top = counts.most_common(15)
+    top_df = pd.DataFrame(top, columns=["skill", "jobs mentioning it"])
+    top_df["% of scope"] = (top_df["jobs mentioning it"] * 100 // len(data)).astype(str) + "%"
+    st.dataframe(top_df, hide_index=True, use_container_width=True)
+
+    # ---- Drill-in: pick a skill, see the jobs that need it ----
+    st.subheader("🔍 Drill in: pick a skill to see which jobs would open up")
+    pick = st.selectbox("Skill", [s for s, _ in top], key="sg_pick")
+    if pick and pick in per_skill_jobs:
+        rows = per_skill_jobs[pick][:30]
+        st.caption(f"{len(per_skill_jobs[pick])} marginal jobs mention **{pick}**. "
+                   f"Showing top {len(rows)} by score:")
+        rows.sort(key=lambda j: -(j.get("match_score") or 0))
+        df = pd.DataFrame([{
+            "score": j.get("match_score"),
+            "sponsor": "✅" if j.get("sponsor_confirmed") else "",
+            "title": j.get("title"),
+            "company": j.get("company_name"),
+            "location": j.get("location"),
+            "open": apply_url(j),
+        } for j in rows])
+        st.dataframe(df, hide_index=True, use_container_width=True,
+                     column_config={
+                         "open": st.column_config.LinkColumn("open", display_text="open ↗"),
+                         "score": st.column_config.NumberColumn("score", format="%d"),
+                     })
 
 elif page == "❄️ Frozen Companies":
     st.header("❄️ Frozen Companies")

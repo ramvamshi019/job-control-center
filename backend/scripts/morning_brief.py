@@ -153,6 +153,29 @@ def _stats_last_24h() -> dict:
             """), {"d7": d7}).scalar() or 0
         except Exception:
             total_waiting = 0
+
+        # Filter sanity check: last night's sample of rejected jobs Claude
+        # thinks should have been kept (false-negatives). Table populated
+        # by filter_sanity_check.py at 05:15 UTC.
+        try:
+            fs_since = now - timedelta(hours=6)  # only THIS morning's sample
+            keep_rows = c.execute(text("""
+                SELECT s.job_id, s.reason, j.title, j.company_name, j.job_url
+                FROM filter_sanity_check s
+                JOIN jobs j ON j.id = s.job_id
+                WHERE s.verdict = 'keep' AND s.sampled_at >= :d
+                ORDER BY s.sampled_at DESC
+                LIMIT 5
+            """), {"d": fs_since}).all()
+            fs_total = c.execute(text(
+                "SELECT COUNT(*) FROM filter_sanity_check WHERE sampled_at >= :d"
+            ), {"d": fs_since}).scalar() or 0
+            fs_keep = c.execute(text(
+                "SELECT COUNT(*) FROM filter_sanity_check WHERE sampled_at >= :d AND verdict = 'keep'"
+            ), {"d": fs_since}).scalar() or 0
+            false_neg_rate = round(100 * fs_keep / fs_total, 1) if fs_total else 0
+        except Exception:
+            keep_rows, fs_total, fs_keep, false_neg_rate = [], 0, 0, 0
     return {
         "total_jobs": total_jobs, "crawled_24h": crawled_24h,
         "survived_24h": survived_24h, "new_24h": new_24h,
@@ -161,6 +184,12 @@ def _stats_last_24h() -> dict:
         "top_jobs": top, "ai_ranked": ai_ranked,
         "followups": [dict(r._mapping) for r in followups],
         "total_waiting": total_waiting,
+        "filter_sanity": {
+            "keep_rows": [dict(r._mapping) for r in keep_rows],
+            "sampled": fs_total,
+            "keep_count": fs_keep,
+            "false_neg_rate": false_neg_rate,
+        },
     }
 
 
@@ -245,6 +274,18 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             plain.append(f"  [{f['days_stale']}d, score {f['match_score']}] {f['title']} @ {f['company_name']}")
             plain.append(f"      {f['job_url']}")
         plain.append("")
+    fs = stats.get("filter_sanity") or {}
+    if fs.get("sampled"):
+        plain.append(f"-- 📊 Filter sanity ({fs['keep_count']}/{fs['sampled']} false-negatives = {fs['false_neg_rate']}%) --")
+        if fs.get("keep_rows"):
+            plain.append("  Rejected jobs Claude thinks you should see:")
+            for r in fs["keep_rows"]:
+                plain.append(f"    - {r['title']} @ {r['company_name']}")
+                plain.append(f"      Why: {r['reason']}")
+                plain.append(f"      {r['job_url']}")
+        else:
+            plain.append("  ✅ Filter looks tight — no false-negatives sampled.")
+        plain.append("")
     plain.append(f"Open dashboard: {DASHBOARD_URL}")
     msg.set_content("\n".join(plain))
 
@@ -294,6 +335,28 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
             f"({total_waiting} total waiting &gt;7d)</span></h3>"
             f"<table style='border-collapse:collapse;width:100%;font-size:14px'>{fup_rows}</table>"
         )
+
+    fs = stats.get("filter_sanity") or {}
+    fs_html = ""
+    if fs.get("sampled"):
+        rate = fs["false_neg_rate"]
+        rate_color = "#1a7f37" if rate < 5 else "#9a6700" if rate < 15 else "#b91c1c"
+        header = (f"<h3>📊 Filter sanity check "
+                  f"<span style='color:{rate_color};font-weight:600'>"
+                  f"({fs['keep_count']}/{fs['sampled']} false-negatives, {rate}%)</span></h3>")
+        if fs.get("keep_rows"):
+            body = "<p style='color:#666;font-size:13px'>Claude sampled rejected jobs and flagged these as ones you'd probably want to see:</p>"
+            body += "".join(
+                f"<div style='border-left:3px solid #9a6700;padding:8px 12px;margin:6px 0;"
+                f"background:#fffbeb;font-size:14px'>"
+                f"<b>{r['title']}</b> @ {r['company_name']}<br>"
+                f"<span style='color:#666;font-style:italic'>{r['reason']}</span><br>"
+                f"<a href='{r['job_url']}'>Open job →</a></div>"
+                for r in fs["keep_rows"]
+            )
+        else:
+            body = "<p style='color:#1a7f37;font-size:14px'>✅ Filter looks tight — Claude agreed with every reject in tonight's sample.</p>"
+        fs_html = header + body
     html = f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:0 auto;padding:20px;color:#24292f">
     <h2 style="margin-top:0">🌙 JCC morning brief</h2>
     <p style="color:#666;font-size:14px">{now_str}</p>
@@ -314,6 +377,7 @@ def _build_email(stats: dict, ai_take: str, to_addr: str) -> EmailMessage:
     <h3>{top_heading}</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">{top_html or '<tr><td>No new sponsor jobs in the last 24h — check ⚡ Fast Apply for the backlog.</td></tr>'}</table>
     {fup_html}
+    {fs_html}
     <p style="margin-top:24px"><a href="{DASHBOARD_URL}" style="color:#0969da;text-decoration:none;font-weight:600">Open dashboard →</a></p>
     </body></html>
     """

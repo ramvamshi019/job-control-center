@@ -1951,15 +1951,37 @@ elif page == "🚀 AI-Ranked Queue":
                     st.markdown(f"<div style='margin:6px 0'>🔑 {tags}</div>", unsafe_allow_html=True)
                 dm = (i.get("referral_dm") or "").strip()
                 if dm:
-                    with st.expander("💬 LinkedIn DM (copy-paste ready)"):
+                    with st.expander("💬 LinkedIn DM (copy-paste ready) + 🔗 find someone to send it to"):
                         st.text_area(
                             "Message", value=dm, height=110,
                             key=f"dm_{i['id']}", label_visibility="collapsed",
                         )
+                        from urllib.parse import quote as _q
+                        co = i["company_name"]
+                        # LinkedIn's current-company + role People search.
+                        # geoUrn is LinkedIn's internal ID for "United States"
+                        # (103644278). Keywords covers recruiter / hiring manager
+                        # / talent acquisition variants.
+                        ln_url = (
+                            "https://www.linkedin.com/search/results/people/?"
+                            "keywords=" + _q(f'recruiter OR "hiring manager" OR "talent acquisition"') +
+                            "&company=" + _q(co) +
+                            "&geoUrn=%5B%22103644278%22%5D"
+                        )
+                        # Google-hack fallback: some users don't have LinkedIn login;
+                        # Google reveals public LinkedIn recruiter profiles anonymously.
+                        gg_url = (
+                            "https://www.google.com/search?q=" +
+                            _q(f'site:linkedin.com/in "{co}" recruiter')
+                        )
+                        col_a, col_b = st.columns(2)
+                        col_a.link_button("🔗 LinkedIn recruiters at " + co[:20], ln_url,
+                                          use_container_width=True)
+                        col_b.link_button("🔎 Google (no login needed)", gg_url,
+                                          use_container_width=True)
                         st.caption(
-                            "Paste into a LinkedIn message to a recruiter / "
-                            "hiring manager at this company. Sonnet-drafted, "
-                            "tailored to this JD."
+                            "Click a recruiter → paste the DM above → send. "
+                            "60s outreach loop. Sonnet-drafted DM, tailored to this JD."
                         )
                 reasons = i.get("reasons") or []
                 red_flags = i.get("red_flags") or []

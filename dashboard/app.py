@@ -559,10 +559,59 @@ def parse_min_salary(job: dict) -> int | None:
 
 
 def filter_feed(jobs: list) -> list:
-    """Drop walled + non-US rows from a jobs list. No-op on empty/None."""
+    """Drop walled + non-US + frozen rows from a jobs list, THEN collapse
+    cross-source duplicates. No-op on empty/None."""
     if not jobs:
         return []
-    return [j for j in jobs if not hide_from_feed(j)]
+    kept = [j for j in jobs if not hide_from_feed(j)]
+    return _collapse_duplicates(kept)
+
+
+def _dedup_key(job: dict) -> tuple:
+    """Fingerprint for cross-source dedup. Same (company, title-core, city)
+    across Greenhouse/LinkedIn/Indeed is almost always the SAME posting."""
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+    company = _norm(job.get("company_name") or "")
+    # Title with level words stripped so "Senior Software Engineer II" and
+    # "Software Engineer" don't collapse but "Software Engineer" from two
+    # sources DO collapse.
+    title_raw = (job.get("title") or "").lower()
+    title_clean = re.sub(
+        r"\b(senior|sr\.?|junior|jr\.?|staff|principal|lead|associate|"
+        r"i{1,3}\b|iv|v|\d{1,2})\b", " ", title_raw)
+    title = _norm(title_clean)
+    # First city word only (handles "Austin, TX" vs "Austin, Texas")
+    loc = (job.get("location") or "").lower()
+    city = re.match(r"[a-z]+", loc)
+    city_key = city.group(0) if city else ""
+    return (company, title, city_key)
+
+
+def _collapse_duplicates(jobs: list) -> list:
+    """Keep the strongest representative per _dedup_key group:
+        - highest match_score wins
+        - tie-break: most recent discovered_at
+        - preserve original list order otherwise"""
+    if len(jobs) < 2:
+        return jobs
+    seen: dict[tuple, dict] = {}
+    order: list[tuple] = []
+    for j in jobs:
+        k = _dedup_key(j)
+        if not k[0] or not k[1]:
+            # Missing company or title -- can't confidently group; pass through
+            k = ("__ungrouped__", str(j.get("id", "")), "")
+        current = seen.get(k)
+        if current is None:
+            seen[k] = j
+            order.append(k)
+        else:
+            # Winner: higher score, or (if tied) newer discovered_at
+            cs, js = current.get("match_score") or 0, j.get("match_score") or 0
+            if js > cs or (js == cs and (j.get("discovered_at") or "") > (current.get("discovered_at") or "")):
+                seen[k] = j
+    return [seen[k] for k in order]
 
 
 def render_apply_kit(job: dict):

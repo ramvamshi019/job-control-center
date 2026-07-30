@@ -66,6 +66,43 @@ def queue(limit: int = 40, min_fit: int = 0):
     return {"count": len(items), "items": items}
 
 
+@router.post("/run_ranker")
+def run_ranker(batch: int = 40):
+    """Kick the AI ranker manually — on-demand button on the dashboard.
+    Nightly cron is disabled (2026-07-30) to stop passive Claude burn.
+    Uses a small batch by default so a click can't accidentally cost \$$$.
+    """
+    import os, subprocess
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip() in ("", None):
+        return {"ok": False, "error": "ANTHROPIC_API_KEY not set on backend"}
+    # Env override — user picks 20/40/100 in the UI. Cap at 200.
+    batch = max(5, min(int(batch or 40), 200))
+    env = os.environ.copy()
+    env["AI_RANK_BATCH"] = str(batch)
+    # Fire and don't wait — response returns immediately. User can watch
+    # progress via /ai_rank/overnight_status which reads the artifact table.
+    subprocess.Popen(
+        ["python", "scripts/ai_rank_queue.py"],
+        cwd="/app/backend", env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return {"ok": True, "batch": batch, "message": f"ranker started on up to {batch} jobs"}
+
+
+@router.post("/run_filter_sanity")
+def run_filter_sanity():
+    """On-demand filter sanity check — was nightly, now click-to-run."""
+    import os, subprocess
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip() in ("", None):
+        return {"ok": False, "error": "ANTHROPIC_API_KEY not set on backend"}
+    subprocess.Popen(
+        ["python", "scripts/filter_sanity_check.py"],
+        cwd="/app/backend",
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return {"ok": True, "message": "sanity check started (~35 samples, ~$0.15)"}
+
+
 @router.get("/overnight_status")
 def overnight_status():
     """Report last-run status of each overnight cron by inspecting the

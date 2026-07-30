@@ -2167,10 +2167,34 @@ elif page == "🟢 Live Feed":
 
 elif page == "🚀 AI-Ranked Queue":
     st.header("🚀 AI-Ranked Apply Queue")
-    st.caption("Yesterday's missed backlog, ranked by Claude for fit against "
-               "your F-1/OPT + data-engineer profile. Wakes up at 05:30 UTC "
-               "each day, so morning-you gets a ready-to-attack pitch list.")
+    st.caption("Sponsor jobs Ram hasn't actioned yet, ranked by Claude for fit + "
+               "reality-check. **Nightly cron is OFF** (Claude credits saved) — "
+               "click the button below to run the ranker on-demand whenever you "
+               "want fresh scores. Each 40-job batch costs ~\$0.15.")
 
+    # On-demand run controls — nightly cron disabled 2026-07-30 to stop
+    # passive burn. Ram triggers the ranker manually when he wants fresh
+    # scores.
+    rc1, rc2, rc3 = st.columns([2, 2, 4])
+    ranker_batch = rc1.selectbox("Batch size", [20, 40, 100, 200], index=1,
+                                 help="Number of un-ranked jobs to score. "
+                                      "20 jobs ≈ \$0.08 · 40 ≈ \$0.15 · 100 ≈ \$0.35 · 200 ≈ \$0.70")
+    if rc2.button("🚀 Run AI ranker now", type="primary", use_container_width=True):
+        r = api_post("/ai_rank/run_ranker", None, batch=ranker_batch)
+        if r and r.get("ok"):
+            st.success(f"✅ Ranker started on up to {r.get('batch')} jobs. "
+                       f"Refresh in ~5 min to see scores populate.")
+        else:
+            st.error(f"❌ {r.get('error') if r else 'API call failed'}")
+    if rc3.button("📊 Also run filter sanity check (~\$0.15)",
+                  use_container_width=True):
+        r = api_post("/ai_rank/run_filter_sanity", {})
+        if r and r.get("ok"):
+            st.success(f"✅ {r.get('message')}")
+        else:
+            st.error(f"❌ {r.get('error') if r else 'API call failed'}")
+
+    st.divider()
     resp = api_get("/ai_rank/queue", limit=40, min_fit=0) or {}
     items = resp.get("items") or []
 

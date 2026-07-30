@@ -74,7 +74,14 @@ async function fill() {
   const tab = await currentTab();
   const resp = await chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", profile });
   el("result").style.display = "block";
-  el("result").innerHTML = `Filled <b>${resp.filled}</b> field(s) · Skipped <b>${resp.skipped}</b> already-filled`;
+  const parts = [
+    `Profile <b>${resp.filled || 0}</b>`,
+    `Memory <b>${resp.replayed || 0}</b>`,
+    `AI <b>${resp.ai_suggested || 0}</b>`,
+    `Skipped <b>${resp.skipped || 0}</b>`,
+  ];
+  el("result").innerHTML = parts.join(" · ") +
+    `<div style="font-size:11px;color:#666;margin-top:4px">AI-suggested fields have a yellow outline — review before submit.</div>`;
 }
 
 async function showSettings() {

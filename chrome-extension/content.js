@@ -165,18 +165,297 @@
     return { filled, skipped };
   }
 
+  // ---- Q&A MEMORY -------------------------------------------------------
+  // Learn from what the user types on unmapped fields, replay it next time
+  // the same question appears anywhere. Storage key: `qa_memory` in
+  // chrome.storage.local, shape { normalized_label: {value, kind, ts} }.
+  //
+  // Kinds:
+  //   'text'    string value
+  //   'select'  option label
+  //   'radio'   selected radio's label text
+  //   'check'   'yes' | 'no' (checkbox)
+  //
+  // Question normalization: lowercase, collapse whitespace, strip trailing
+  // punctuation, drop the "* required" marker, cap at 140 chars. So
+  // "Are you willing to relocate? *" and "Are you  willing to relocate?"
+  // collide to the same key.
+  function normQuestion(s) {
+    return (s || "")
+      .replace(/\s+/g, " ")
+      .replace(/[*••]+$/g, "")
+      .replace(/\s*(required|optional)\s*$/i, "")
+      .replace(/[?:!.]+$/, "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 140);
+  }
+
+  async function loadQAMemory() {
+    return new Promise(r =>
+      chrome.storage.local.get("qa_memory", ({ qa_memory }) => r(qa_memory || {}))
+    );
+  }
+  async function saveQAEntry(key, entry) {
+    const mem = await loadQAMemory();
+    mem[key] = { ...entry, ts: Date.now() };
+    return new Promise(r => chrome.storage.local.set({ qa_memory: mem }, r));
+  }
+
+  // Capture user answers as they change fields. Only saves fields that
+  // aren't in the profile FIELD_MAP — those are already handled by the
+  // structured profile so no need to duplicate. Debounced on text inputs.
+  const _saveTimers = new WeakMap();
+  function attachQACapture() {
+    // Text/select fields
+    document.querySelectorAll("input,textarea,select").forEach(el => {
+      if (el.disabled || el.readOnly || el.type === "hidden") return;
+      if (el.type === "file" || el.type === "submit" || el.type === "button") return;
+      if (el.__jccQACaptured) return;
+      el.__jccQACaptured = true;
+      const kind = el.tagName === "SELECT" ? "select"
+        : el.type === "radio" ? "radio"
+        : el.type === "checkbox" ? "check"
+        : "text";
+      const handler = () => {
+        const label = labelFor(el);
+        if (!label) return;
+        // Skip if this label matches a profile field — the profile owns it.
+        if (findProfileKey(label)) return;
+        const key = normQuestion(label);
+        if (!key || key.length < 3) return;
+        let value;
+        if (kind === "radio") {
+          if (!el.checked) return;
+          value = (labelFor(el) || el.value || "").trim();
+        } else if (kind === "check") {
+          value = el.checked ? "yes" : "no";
+        } else if (kind === "select") {
+          const opt = el.options[el.selectedIndex];
+          value = opt ? (opt.textContent || opt.value).trim() : "";
+        } else {
+          value = (el.value || "").trim();
+        }
+        if (!value) return;
+        // Debounce text input so we don't save on every keystroke
+        if (kind === "text") {
+          clearTimeout(_saveTimers.get(el));
+          _saveTimers.set(el, setTimeout(() => saveQAEntry(key, { value, kind }), 900));
+        } else {
+          saveQAEntry(key, { value, kind });
+        }
+      };
+      el.addEventListener("change", handler);
+      if (kind === "text") el.addEventListener("blur", handler);
+    });
+  }
+
+  // Replay memory into the current page — called at end of fillFieldsWith().
+  async function replayQAMemory() {
+    const mem = await loadQAMemory();
+    let replayed = 0;
+    const inputs = document.querySelectorAll(
+      "input:not([type=file]):not([type=submit]):not([type=button]):not([type=hidden]),textarea,select"
+    );
+    // Handle non-radio elements
+    for (const el of inputs) {
+      if (el.disabled || el.readOnly) continue;
+      if (el.type === "radio") continue;
+      // Skip if user or profile already filled
+      if (el.type === "checkbox") {
+        if (el.checked) continue;
+      } else if (el.tagName !== "SELECT" && el.value && el.value.trim()) {
+        continue;
+      }
+      const label = labelFor(el);
+      if (!label || findProfileKey(label)) continue;
+      const entry = mem[normQuestion(label)];
+      if (!entry) continue;
+      try {
+        if (el.tagName === "SELECT") {
+          if (setSelectValue(el, entry.value)) replayed++;
+        } else if (el.type === "checkbox") {
+          if (entry.value === "yes" && !el.checked) { el.click(); replayed++; }
+        } else {
+          setNativeValue(el, entry.value);
+          replayed++;
+        }
+      } catch (e) { /* skip */ }
+    }
+    // Radio groups: match saved label text to a radio's label
+    const groups = new Map();
+    document.querySelectorAll("input[type=radio]").forEach(r => {
+      const name = r.name || "";
+      if (!name) return;
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(r);
+    });
+    for (const [name, radios] of groups) {
+      if (radios.some(r => r.checked)) continue;
+      const groupLabel = labelFor(radios[0]);
+      if (!groupLabel || findProfileKey(groupLabel)) continue;
+      const entry = mem[normQuestion(groupLabel)];
+      if (!entry) continue;
+      const want = (entry.value || "").toLowerCase();
+      const target = radios.find(r => {
+        const l = (labelFor(r) || r.value || "").trim().toLowerCase();
+        return l === want || l.startsWith(want) || want.startsWith(l);
+      });
+      if (target) { target.click(); replayed++; }
+    }
+    return replayed;
+  }
+
+  // Attach capture on load + on any DOM mutation (SPAs mount fields late).
+  attachQACapture();
+  new MutationObserver(() => attachQACapture())
+    .observe(document.body || document.documentElement, { subtree: true, childList: true });
+
   // ---- MESSAGE HANDLER (from popup) ------------------------------------
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "AUTOFILL") {
+      // Profile fields first, then Q&A memory for the custom questions
       const result = fillFieldsWith(msg.profile);
-      sendResponse(result);
-      return true;
+      replayQAMemory().then(async replayed => {
+        // Then AI-suggest for what neither of those covered (bounded — see
+        // suggestUnknownFields for the safeguards).
+        const aiCount = await suggestUnknownFields(msg.profile).catch(() => 0);
+        sendResponse({ ...result, replayed, ai_suggested: aiCount });
+      });
+      return true;   // keep the message channel open
     }
     if (msg.type === "PING") {
       sendResponse({ ok: true, host: window.location.host });
       return true;
     }
   });
+
+  // ---- AI-SUGGEST FALLBACK ---------------------------------------------
+  // For any field that (a) isn't in the profile FIELD_MAP, (b) isn't in
+  // Q&A memory, and (c) is still empty — send the question + options + a
+  // trimmed profile to backend /apply/suggest_answer for a Claude pick.
+  // Marked with a soft yellow outline so Ram can see AI-filled vs
+  // profile-filled at a glance.
+  //
+  // Rate limits: at most 8 AI calls per page load (typical form has 3-5
+  // unknowns), never fires for questions we've asked before this page
+  // load (dedup within-page). Silent no-op if API URL isn't reachable.
+  async function suggestUnknownFields(profile) {
+    let apiUrl;
+    try {
+      apiUrl = await new Promise(r =>
+        chrome.storage.local.get("apiUrl", ({ apiUrl }) => r(apiUrl || "")));
+    } catch (e) { return 0; }
+    if (!apiUrl) return 0;
+    const base = apiUrl.replace(/\/+$/, "");
+    const mem = await loadQAMemory();
+
+    const asked = new Set();
+    const collectRadioGroups = () => {
+      const groups = new Map();
+      document.querySelectorAll("input[type=radio]").forEach(r => {
+        const name = r.name || "";
+        if (!name) return;
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(r);
+      });
+      return groups;
+    };
+
+    let n = 0;
+    const MAX = 8;
+    const jobTitle = pickJobTitle();
+    const companyName = pickCompanyName();
+
+    // Text/textarea/select unknowns
+    const inputs = document.querySelectorAll(
+      "input:not([type=file]):not([type=submit]):not([type=button])" +
+      ":not([type=hidden]):not([type=radio]):not([type=checkbox]),textarea,select"
+    );
+    for (const el of inputs) {
+      if (n >= MAX) break;
+      if (el.disabled || el.readOnly) continue;
+      if (el.tagName !== "SELECT" && el.value && el.value.trim()) continue;
+      if (el.tagName === "SELECT" && el.value && el.selectedIndex > 0) continue;
+      const label = labelFor(el);
+      if (!label) continue;
+      if (findProfileKey(label)) continue;
+      const key = normQuestion(label);
+      if (!key || asked.has(key)) continue;
+      if (mem[key]) continue;   // memory already handled
+      asked.add(key);
+      let options = null;
+      if (el.tagName === "SELECT") {
+        options = Array.from(el.options)
+          .map(o => (o.textContent || o.value || "").trim())
+          .filter(Boolean).slice(0, 60);
+      }
+      const suggestion = await callSuggest(base, {
+        question: label.trim().slice(0, 300),
+        options, kind: el.tagName === "SELECT" ? "select" : "text",
+        job_title: jobTitle, company: companyName, profile,
+      });
+      if (!suggestion?.answer) continue;
+      try {
+        if (el.tagName === "SELECT") {
+          if (setSelectValue(el, suggestion.answer)) { markAI(el); n++; }
+        } else {
+          setNativeValue(el, suggestion.answer);
+          markAI(el);
+          n++;
+        }
+      } catch (e) { /* skip */ }
+    }
+
+    // Radio groups
+    for (const [name, radios] of collectRadioGroups()) {
+      if (n >= MAX) break;
+      if (radios.some(r => r.checked)) continue;
+      const groupLabel = labelFor(radios[0]);
+      if (!groupLabel) continue;
+      if (findProfileKey(groupLabel)) continue;
+      const key = normQuestion(groupLabel);
+      if (!key || asked.has(key) || mem[key]) continue;
+      asked.add(key);
+      const options = radios
+        .map(r => (labelFor(r) || r.value || "").trim())
+        .filter(Boolean);
+      const suggestion = await callSuggest(base, {
+        question: groupLabel.trim().slice(0, 300),
+        options, kind: "radio",
+        job_title: jobTitle, company: companyName, profile,
+      });
+      if (!suggestion?.answer) continue;
+      const want = suggestion.answer.trim().toLowerCase();
+      const target = radios.find(r => {
+        const l = (labelFor(r) || r.value || "").trim().toLowerCase();
+        return l === want || l.startsWith(want) || want.startsWith(l);
+      });
+      if (target) { target.click(); markAI(target); n++; }
+    }
+    return n;
+  }
+
+  async function callSuggest(base, body) {
+    try {
+      const resp = await fetch(base + "/apply/suggest_answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) { return null; }
+  }
+
+  function markAI(el) {
+    // Soft yellow border so Ram can eyeball what Claude picked before submit
+    try {
+      el.style.outline = "2px solid #f59e0b";
+      el.style.outlineOffset = "1px";
+      el.title = (el.title || "") + " · [AI-suggested — review before submit]";
+    } catch (e) { /* skip */ }
+  }
 
   // ---- AUTO-LOG-APPLIED ON SUBMIT --------------------------------------
   // Fires ONCE per page load when the user's submit lands. Sends

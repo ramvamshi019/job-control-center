@@ -348,6 +348,20 @@ def run() -> dict:
             matched += 1
             if cls == "rejection":
                 new_reject += 1
+                # AUTO-TRIAGE: move Applied -> Rejected so the job drops out of
+                # discovery views immediately (they should filter Rejected already).
+                # Non-destructive: preserves the original status in rejection_reason
+                # so a false-positive can be manually reverted from the Rejected page.
+                with engine.connect() as c:
+                    c.execute(text("PRAGMA busy_timeout = 30000"))
+                    c.execute(text("""
+                        UPDATE jobs
+                        SET status = 'Rejected',
+                            rejection_reason = 'auto-triaged: rejection email from '
+                                               || COALESCE(:from_dom, 'recruiter')
+                        WHERE id = :jid AND status = 'Applied'
+                    """), {"from_dom": from_domain, "jid": job_id})
+                    c.commit()
             elif cls == "interview":
                 new_interview += 1
 

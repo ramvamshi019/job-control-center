@@ -507,6 +507,57 @@ def hide_from_feed(job: dict) -> bool:
     return bool(name) and name in _frozen_companies()
 
 
+# ---- Salary parsing: extract min USD from a job description --------------
+# CA/NY/WA laws mandate salary in the posting -- this parser catches the
+# common patterns: "$120,000 - $180,000", "$120K to $180K", "starting at $150K".
+_SALARY_RANGE_RE = re.compile(
+    r"\$\s*(\d{2,3})[,]?(\d{3})?\s*[kK]?\s*(?:[-–—to]{1,3})\s*"
+    r"\$?\s*(\d{2,3})[,]?(\d{3})?\s*[kK]?",
+)
+_SALARY_SINGLE_RE = re.compile(
+    r"(?:starting\s+at|from|minimum|min|base)\s*[:\s]*"
+    r"\$\s*(\d{2,3})[,]?(\d{3})?\s*[kK]?",
+    re.I,
+)
+_SALARY_SIMPLE_RE = re.compile(r"\$\s*(\d{2,3})[,]?(\d{3})?\s*[kK]?")
+
+
+def _to_dollars(major: str, minor: str | None) -> int:
+    """Turn regex groups back into an integer USD. '120' + '000' -> 120000,
+    '150' alone -> 150000 (assume K when 3 digits). Handles '$180K' too."""
+    n = int(major)
+    if minor:
+        n = n * 1000 + int(minor)
+    elif n < 500:  # bare "150" or "$180K" almost always means thousands
+        n = n * 1000
+    return n
+
+
+def parse_min_salary(job: dict) -> int | None:
+    """Return the minimum USD salary named in the JD, or None if unparseable.
+    Prefers a range's lower bound, falls back to 'starting at' phrases, then
+    the first bare `$` amount that looks like a salary (>= 40K, <= 500K)."""
+    desc = (job.get("description") or "")[:5000]  # cap for perf
+    if not desc:
+        return None
+    m = _SALARY_RANGE_RE.search(desc)
+    if m:
+        low = _to_dollars(m.group(1), m.group(2))
+        if 40_000 <= low <= 500_000:
+            return low
+    m = _SALARY_SINGLE_RE.search(desc)
+    if m:
+        v = _to_dollars(m.group(1), m.group(2))
+        if 40_000 <= v <= 500_000:
+            return v
+    # Last-ditch: first $ amount in the sane salary range
+    for m in _SALARY_SIMPLE_RE.finditer(desc):
+        v = _to_dollars(m.group(1), m.group(2))
+        if 60_000 <= v <= 500_000:  # tighter range for the fallback to avoid false matches
+            return v
+    return None
+
+
 def filter_feed(jobs: list) -> list:
     """Drop walled + non-US rows from a jobs list. No-op on empty/None."""
     if not jobs:
@@ -753,17 +804,24 @@ elif page == "🎯 Sponsors Watchlist":
         "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     sw_min_score = c1.slider("Min match score", 0, 90, 30, step=5, key="sw_min_score",
                              help="30 = default; raise for tighter fit, lower for broader queue.")
     sw_fresh_days = c2.slider("Discovered within N days", 0, 90, 30, step=5, key="sw_fresh_days",
                               help="0 = any age. Sponsor jobs are worth pursuing even older, "
                                    "but recency matters for callback rates.")
-    sw_group = c3.checkbox("Group by experience", value=True, key="sw_group")
+    sw_min_salary = c3.slider("Min salary ($K)", 0, 300, 0, step=10, key="sw_min_salary",
+                              help="0 = show all (jobs without a parsed salary are always kept). "
+                                   "Bump to 120 to hide sub-$120K roles when the JD mentions salary. "
+                                   "Only filters jobs where a salary was FOUND in the description -- "
+                                   "unparseable ones stay so you don't miss real opportunities.")
+    sw_group = c4.checkbox("Group by experience", value=True, key="sw_group")
 
     def sponsors_watchlist_feed():
+        # For salary filter to work, we need JD text -- NOT slim.
         params = dict(min_score=sw_min_score, exclude_rejected=True,
-                      order_by="score", limit=3000, slim=True)
+                      order_by="score", limit=3000,
+                      slim=(sw_min_salary == 0))  # only pull descriptions when filter is active
         if sw_fresh_days > 0:
             params["discovered_within_hours"] = sw_fresh_days * 24
         data = filter_feed(api_get("/jobs/", **params))
@@ -771,6 +829,13 @@ elif page == "🎯 Sponsors Watchlist":
         data = [j for j in data if j.get("sponsor_confirmed")]
         # Never show already-applied on this page (whole point is TRIAGE).
         data = [j for j in data if j.get("status") not in ("Applied", "Archived")]
+
+        # Salary filter -- only drops rows where we PARSED a salary and it's
+        # below the floor. Unparseable rows stay to avoid false-negatives.
+        if sw_min_salary > 0:
+            floor = sw_min_salary * 1000
+            data = [j for j in data
+                    if (parse_min_salary(j) or floor) >= floor]
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("🎯 Sponsor jobs", len(data))
@@ -796,6 +861,7 @@ elif page == "🎯 Sponsors Watchlist":
                 "company": j.get("company_name"),
                 "location": j.get("location"),
                 "sponsor_score": j.get("sponsor_score", 0),
+                "salary": parse_min_salary(j) or 0,
                 "risk": j.get("sponsorship_risk"),
                 "open": apply_url(j),
                 "referral": referral_url(j),
@@ -806,9 +872,9 @@ elif page == "🎯 Sponsors Watchlist":
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "posted", "score", "title", "company", "location",
-                          "sponsor_score", "risk", "open", "referral"],
+                          "sponsor_score", "salary", "risk", "open", "referral"],
                 column_order=["dismiss", "status", "sponsor_score", "posted", "score",
-                              "title", "company", "location", "risk", "open",
+                              "salary", "title", "company", "location", "risk", "open",
                               "referral", "applied"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
@@ -818,6 +884,10 @@ elif page == "🎯 Sponsors Watchlist":
                     "sponsor_score": st.column_config.NumberColumn(
                         "sponsor", format="%d",
                         help="Company H-1B history score (higher = more USCIS approvals)."),
+                    "salary": st.column_config.NumberColumn(
+                        "min $", format="$%d",
+                        help="Minimum salary parsed from the JD ($0 = not stated / unparseable). "
+                             "CA/NY/WA require salary in the posting."),
                     "posted": st.column_config.TextColumn(
                         "posted", help="Real posting date (or ~first-seen if source hides it)."),
                     "score": st.column_config.NumberColumn("score", format="%d"),

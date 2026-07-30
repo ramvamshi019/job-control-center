@@ -485,6 +485,41 @@ def is_non_us(job: dict) -> bool:
     return False
 
 
+# Parser for the [LCA:{...}] prefix that push_lca_to_notes.py stamps on
+# companies.notes. Lets the dashboard show recent-year LCA filings + median
+# wage per company WITHOUT needing a new backend API endpoint (backend
+# restart is the expensive move -- kills the running seeders).
+_LCA_JSON_RE = re.compile(r"\[LCA:(\{[^}]*\})\]")
+
+
+def parse_lca_from_notes(notes: str | None) -> dict:
+    """Return {c, p, w, t} from a company's notes prefix, or empty dict.
+    Zero-cost when no LCA prefix present."""
+    if not notes:
+        return {}
+    m = _LCA_JSON_RE.search(notes)
+    if not m:
+        return {}
+    try:
+        import json as _j
+        return _j.loads(m.group(1))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+@st.cache_data(ttl=60)
+def _company_lca_lookup() -> dict[str, dict]:
+    """Map company_name.lower() -> {c, p, w, t} LCA data. Refreshed
+    every 60s. Empty dict if no company has LCA data yet."""
+    cos = api_get("/companies/") or []
+    out: dict[str, dict] = {}
+    for c in cos:
+        lca = parse_lca_from_notes(c.get("notes"))
+        if lca:
+            out[(c.get("name") or "").lower()] = lca
+    return out
+
+
 @st.cache_data(ttl=60)
 def _frozen_companies() -> set[str]:
     """Names of companies user marked as ❄️ frozen (recent layoffs, hiring freeze).
@@ -904,7 +939,13 @@ elif page == "🎯 Sponsors Watchlist":
                     "widen the discovery window with the sliders above.")
             return
 
+        # LCA lookup: recent-year real H-1B filings per company (from the
+        # enrich_lca batch). Cached 60s at module level.
+        lca_by_company = _company_lca_lookup()
+
         def render_sw(subset, key_prefix):
+            def _lca(j):
+                return lca_by_company.get((j.get("company_name") or "").lower(), {})
             rows = [{
                 "id": j.get("id"),
                 "applied": False,   # This page hides Applied, so always start unticked
@@ -917,6 +958,10 @@ elif page == "🎯 Sponsors Watchlist":
                 "company": j.get("company_name"),
                 "location": j.get("location"),
                 "sponsor_score": j.get("sponsor_score", 0),
+                # NEW: real recent-year LCA data if we have it
+                "lca_2024": _lca(j).get("p", 0),   # filings_prior = 2024
+                "lca_2025": _lca(j).get("c", 0),   # filings_current = 2025
+                "lca_wage": _lca(j).get("w", 0),
                 "salary": parse_min_salary(j) or 0,
                 "risk": j.get("sponsorship_risk"),
                 "open": apply_url(j),
@@ -928,9 +973,11 @@ elif page == "🎯 Sponsors Watchlist":
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "posted", "score", "title", "company", "location",
-                          "sponsor_score", "salary", "risk", "open", "referral"],
-                column_order=["dismiss", "status", "sponsor_score", "posted", "score",
-                              "salary", "title", "company", "location", "risk", "open",
+                          "sponsor_score", "lca_2024", "lca_2025", "lca_wage",
+                          "salary", "risk", "open", "referral"],
+                column_order=["dismiss", "status", "sponsor_score", "lca_2024", "lca_2025",
+                              "lca_wage", "posted", "score", "salary",
+                              "title", "company", "location", "risk", "open",
                               "referral", "applied"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
@@ -940,8 +987,19 @@ elif page == "🎯 Sponsors Watchlist":
                     "sponsor_score": st.column_config.NumberColumn(
                         "sponsor", format="%d",
                         help="Company H-1B history score (higher = more USCIS approvals)."),
+                    "lca_2024": st.column_config.NumberColumn(
+                        "H1B '24", format="%d",
+                        help="Actual H-1B LCA filings in 2024 (from DOL data). "
+                             "0 = no data yet (LCA enrichment still running)."),
+                    "lca_2025": st.column_config.NumberColumn(
+                        "H1B '25", format="%d",
+                        help="Actual H-1B LCA filings in 2025 YTD (from DOL data)."),
+                    "lca_wage": st.column_config.NumberColumn(
+                        "median $", format="$%d",
+                        help="Median H-1B wage filed at this company (from DOL data). "
+                             "Reality check on the JD's salary range."),
                     "salary": st.column_config.NumberColumn(
-                        "min $", format="$%d",
+                        "JD min $", format="$%d",
                         help="Minimum salary parsed from the JD ($0 = not stated / unparseable). "
                              "CA/NY/WA require salary in the posting."),
                     "posted": st.column_config.TextColumn(

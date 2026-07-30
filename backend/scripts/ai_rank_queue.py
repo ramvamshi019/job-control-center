@@ -66,6 +66,10 @@ def _ensure_table() -> None:
             c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN referral_dm TEXT"))
         except Exception:
             pass
+        try:
+            c.execute(text("ALTER TABLE job_ai_ranking ADD COLUMN salary_json TEXT"))
+        except Exception:
+            pass
 
 
 def _pick_candidates() -> list[dict]:
@@ -137,7 +141,8 @@ Return ONLY a JSON object, no preface, no markdown fences:
   "red_flags": ["<red flag or empty>"],
   "pitch_line": "<one sentence Ram can paste into a cover letter, first-person, specific to this JD, 25-35 words>",
   "keywords": ["<top 5 skills/tools/keywords the JD emphasizes, e.g. 'Airflow', 'dbt', 'AWS Glue'>"],
-  "referral_dm": "<3-sentence LinkedIn DM Ram can paste to a hiring manager or recruiter at {job['company_name']}. First sentence: warm opener ('Saw the {job['title']} opening'). Second: 1-2 concrete fit points from Ram's stack. Third: ask (would love a 15-min chat / could you refer me / any advice on landing this). No emojis. No 'Dear'. 45-60 words total.>"
+  "referral_dm": "<3-sentence LinkedIn DM Ram can paste to a hiring manager or recruiter at {job['company_name']}. First sentence: warm opener ('Saw the {job['title']} opening'). Second: 1-2 concrete fit points from Ram's stack. Third: ask (would love a 15-min chat / could you refer me / any advice on landing this). No emojis. No 'Dear'. 45-60 words total.>",
+  "salary": {{"min": <int USD annual or null>, "max": <int USD annual or null>, "note": "<'base', 'total comp', 'unstated', or 'hourly $X' if hourly>"}}
 }}"""
     try:
         resp = client.messages.create(
@@ -172,9 +177,9 @@ def _store(job_id: int, result: dict) -> None:
         c.execute(text("""
             INSERT INTO job_ai_ranking
                 (job_id, fit_score, reasons, red_flags, pitch_line, keywords,
-                 referral_dm, raw_json, generated_at)
+                 referral_dm, salary_json, raw_json, generated_at)
             VALUES
-                (:jid, :fs, :rs, :rf, :pl, :kw, :dm, :rj, :ts)
+                (:jid, :fs, :rs, :rf, :pl, :kw, :dm, :sal, :rj, :ts)
             ON CONFLICT(job_id) DO UPDATE SET
                 fit_score = excluded.fit_score,
                 reasons = excluded.reasons,
@@ -182,6 +187,7 @@ def _store(job_id: int, result: dict) -> None:
                 pitch_line = excluded.pitch_line,
                 keywords = excluded.keywords,
                 referral_dm = excluded.referral_dm,
+                salary_json = excluded.salary_json,
                 raw_json = excluded.raw_json,
                 generated_at = excluded.generated_at
         """), {
@@ -192,6 +198,7 @@ def _store(job_id: int, result: dict) -> None:
             "pl": (p.get("pitch_line") or "").strip(),
             "kw": json.dumps(p.get("keywords") or []),
             "dm": (p.get("referral_dm") or "").strip(),
+            "sal": json.dumps(p.get("salary") or {}),
             "rj": result["raw"],
             "ts": utcnow_naive(),
         })

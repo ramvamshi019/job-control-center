@@ -1915,10 +1915,24 @@ elif page == "🚀 AI-Ranked Queue":
                     f"<div style='background:{color};color:#fff;font-weight:700;"
                     f"font-size:22px;text-align:center;padding:12px;border-radius:6px'>"
                     f"{fit}</div>", unsafe_allow_html=True)
+                sal = i.get("salary") or {}
+                sal_line = ""
+                if sal.get("min") or sal.get("max"):
+                    lo = sal.get("min") or 0
+                    hi = sal.get("max") or 0
+                    if lo and hi:
+                        sal_line = f" · 💰 ${lo//1000}k-${hi//1000}k"
+                    elif lo:
+                        sal_line = f" · 💰 ${lo//1000}k+"
+                    elif hi:
+                        sal_line = f" · 💰 up to ${hi//1000}k"
+                    if sal.get("note") and sal["note"] != "unstated":
+                        sal_line += f" ({sal['note']})"
                 head_cols[1].markdown(
                     f"**{i['title']}**  \n"
                     f"{i['company_name']} · {i.get('location','?')} · "
-                    f"H-1B score {i.get('h1b_score',0)}/100 · heuristic {i.get('match_score',0)}")
+                    f"H-1B score {i.get('h1b_score',0)}/100 · heuristic {i.get('match_score',0)}"
+                    f"{sal_line}")
                 head_cols[2].markdown(f"[Open job →]({i['job_url']})")
                 if i.get("pitch_line"):
                     st.markdown(

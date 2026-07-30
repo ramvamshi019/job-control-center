@@ -65,6 +65,41 @@ def queue(limit: int = 40, min_fit: int = 0):
     return {"count": len(items), "items": items}
 
 
+@router.get("/overnight_status")
+def overnight_status():
+    """Report last-run status of each overnight cron by inspecting the
+    artifact tables. Dashboard's Ops Health page consumes this so Ram
+    can eyeball whether the nightly jobs are firing on schedule.
+    Windows: 26h so a slightly-late run still shows green."""
+    from datetime import timedelta as _td
+    with engine.connect() as c:
+        exists = lambda t: bool(c.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=:t"
+        ), {"t": t}).scalar())
+        def _last(table: str, col: str) -> tuple[int, str | None]:
+            if not exists(table):
+                return 0, None
+            row = c.execute(text(
+                f"SELECT COUNT(*), MAX({col}) FROM {table} WHERE {col} >= :d"
+            ), {"d": None}).fetchone()
+            # count-over-lifetime for status; last-run timestamp separate
+            total = c.execute(text(f"SELECT MAX({col}) FROM {table}")).scalar()
+            last24 = c.execute(text(
+                f"SELECT COUNT(*) FROM {table} WHERE {col} >= datetime('now', '-26 hours')"
+            )).scalar() or 0
+            return last24, str(total) if total else None
+        jobs = {}
+        n, ts = _last("job_ai_ranking", "generated_at")
+        jobs["ai_rank_queue"] = {"last_run": ts, "rows_last_24h": n, "cron": "05:30 UTC"}
+        n, ts = _last("hn_buzz", "fetched_at")
+        jobs["hn_buzz"] = {"last_run": ts, "rows_last_24h": n, "cron": "05:20 UTC"}
+        n, ts = _last("filter_sanity_check", "sampled_at")
+        jobs["filter_sanity_check"] = {"last_run": ts, "rows_last_24h": n, "cron": "05:15 UTC"}
+        n, ts = _last("ai_interview_prep", "generated_at")
+        jobs["interview_prep_batch"] = {"last_run": ts, "rows_last_24h": n, "cron": "05:25 UTC"}
+    return {"jobs": jobs}
+
+
 @router.get("/interview_prep/{job_id}")
 def interview_prep(job_id: int):
     """Return cached interview prep sheet for a job (if any).

@@ -3128,6 +3128,28 @@ elif page == "📈 Ops Health":
     st.caption("If 'last 1h' shows 0 for long stretches, livewatch may be stalled. Normally "
                "shows several hundred jobs/hour during business hours.")
 
+    # ---- overnight cron status ----
+    st.divider()
+    st.subheader("⑥ Overnight cron jobs")
+    st.caption("Each nightly script writes to a database artifact table on success. "
+               "Green = ran in the last 26h, red = missed. Cron times are UTC.")
+    ov = api_get("/ai_rank/overnight_status") or {}
+    ov_jobs = ov.get("jobs") or {}
+    if ov_jobs:
+        rows = []
+        for name, info in ov_jobs.items():
+            fresh = info.get("rows_last_24h", 0) > 0
+            rows.append({
+                "job": name,
+                "status": "✅" if fresh else "❌ stale",
+                "last_run_utc": (info.get("last_run") or "never")[:16],
+                "rows_last_26h": info.get("rows_last_24h", 0),
+                "cron": info.get("cron", "?"),
+            })
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    else:
+        st.info("Overnight status endpoint not returning data (backend may need restart).")
+
 elif page == "🧠 Skills Gap":
     st.header("🧠 Skills Gap — what to learn next")
     st.caption("For every job you scored **just below the 'strong match' threshold** "

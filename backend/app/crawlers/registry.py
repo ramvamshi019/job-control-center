@@ -49,6 +49,7 @@ from app.crawlers.personio import PersonioCrawler
 from app.crawlers.pinpoint import PinpointCrawler
 from app.crawlers.amazon import AmazonJobsCrawler
 from app.crawlers.apple import AppleJobsCrawler
+from app.crawlers.jsonld import JSONLDCrawler
 from app.crawlers.adzuna import AdzunaCrawler
 from app.crawlers.generic_placeholder import GenericCrawler
 from app.models.company import Company
@@ -91,6 +92,7 @@ CRAWLERS: List[BaseCrawler] = [
     PinpointCrawler(),    # per-company Pinpoint boards (keyless postings.json)
     AmazonJobsCrawler(),  # sentinel: amazon.jobs public JSON API (big H-1B sponsor)
     AppleJobsCrawler(),   # sentinel: jobs.apple.com hydration-data HTML scrape
+    JSONLDCrawler(),      # generic: schema.org JobPosting ld+json on any career URL
     AdzunaCrawler(),      # sentinel: Adzuna aggregator (needs ADZUNA_APP_ID/KEY)
     GenericCrawler(),  # keep LAST: matches anything as a fallback.
 ]

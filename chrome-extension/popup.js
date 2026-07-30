@@ -78,7 +78,8 @@ async function fill() {
 }
 
 async function showSettings() {
-  const { profile } = await chrome.storage.local.get("profile");
+  const { profile, apiUrl } = await chrome.storage.local.get(["profile", "apiUrl"]);
+  el("api-url").value = apiUrl || "http://localhost:8000";
   const container = el("profile-fields");
   container.innerHTML = "";
   for (const [key, label] of PROFILE_KEYS) {
@@ -103,9 +104,10 @@ async function saveProfile() {
   document.querySelectorAll("#profile-fields input").forEach(inp => {
     profile[inp.dataset.key] = inp.value.trim();
   });
-  await chrome.storage.local.set({ profile });
+  const apiUrl = (el("api-url").value || "").trim() || "http://localhost:8000";
+  await chrome.storage.local.set({ profile, apiUrl });
   el("status").className = "status ok";
-  el("status").textContent = "✅ Profile saved. Reopen popup to refresh.";
+  el("status").textContent = `✅ Saved. API URL: ${apiUrl}`;
 }
 
 // Wire everything up

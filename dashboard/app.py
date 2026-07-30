@@ -2214,6 +2214,37 @@ elif page == "Applied":
                "guesses `careers@company.com`, drafts a tailored message, and opens Gmail "
                "compose in a new tab. Review + hit Send.")
 
+    # ---- Log external apply ------------------------------------------
+    # For jobs you applied to via LinkedIn Easy Apply, a company site JCC
+    # doesn't crawl yet, or any other flow that never touched Fast Apply.
+    with st.expander("➕ Log external apply (paste a URL)", expanded=False):
+        st.caption("Paste the job posting URL you applied to. If we already "
+                   "have that job crawled, its status flips to Applied. If "
+                   "not, a new Applied row is created so it shows up in your "
+                   "follow-up queue, morning brief, and analytics.")
+        with st.form("log_external_apply_form", clear_on_submit=True):
+            ext_url = st.text_input("Job URL *", placeholder="https://…")
+            c1, c2 = st.columns(2)
+            ext_title = c1.text_input("Title (optional — used if new)")
+            ext_company = c2.text_input("Company (optional — used if new)")
+            submitted = st.form_submit_button("Log as Applied", type="primary")
+        if submitted:
+            if not ext_url.strip().startswith(("http://", "https://")):
+                st.error("Paste a valid http(s) URL.")
+            else:
+                res = api_post("/applications/log-external", {
+                    "url": ext_url.strip(),
+                    "title": ext_title.strip() or None,
+                    "company": ext_company.strip() or None,
+                    "source": "dashboard",
+                })
+                if res:
+                    tag = "✅ Matched existing" if res.get("matched") else "➕ Inserted new"
+                    st.success(f"{tag}: **{res.get('title','?')}** @ **{res.get('company_name','?')}** — job_id {res.get('job_id')}")
+                    st.rerun()
+                else:
+                    st.error("API call failed. Check backend logs.")
+
     df = jobs_df(status="Applied")
     if df.empty:
         st.info("Nothing applied yet.")

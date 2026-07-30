@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "JCC Autofill",
-  "version": "1.0.0",
-  "description": "One-click autofill for job applications on Greenhouse, Lever, Ashby, Workday, iCIMS, BambooHR, and SmartRecruiters. Personal use; profile stored locally in your browser.",
+  "version": "1.1.0",
+  "description": "Autofill + auto-log-applied for job applications on Greenhouse, Lever, Ashby, Workday, iCIMS, BambooHR, SmartRecruiters, Workable. Personal use; profile stored locally.",
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "notifications"
   ],
   "host_permissions": [
     "*://boards.greenhouse.io/*",
@@ -17,7 +18,10 @@
     "*://*.icims.com/*",
     "*://*.bamboohr.com/*",
     "*://jobs.smartrecruiters.com/*",
-    "*://apply.workable.com/*"
+    "*://apply.workable.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://*.sslip.io/*"
   ],
   "action": {
     "default_popup": "popup.html",

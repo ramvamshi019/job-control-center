@@ -177,4 +177,94 @@
       return true;
     }
   });
+
+  // ---- AUTO-LOG-APPLIED ON SUBMIT --------------------------------------
+  // Fires ONCE per page load when the user's submit lands. Sends
+  // APPLY_SUBMITTED to background.js which POSTs /applications/log-external.
+  // Guarded so re-clicking a button (validation error, etc) doesn't spam.
+  let applyLogged = false;
+
+  function pickJobTitle() {
+    // Try common ATS patterns for the posting title on the current page.
+    const sel = [
+      'h1.app-title', 'h1[data-qa="posting-title"]', 'h1.posting-headline',
+      'div.job-title', 'h1.headline', 'h2.header-large', 'h1',
+    ];
+    for (const s of sel) {
+      const el = document.querySelector(s);
+      if (el && el.textContent && el.textContent.trim().length > 3) {
+        return el.textContent.trim().slice(0, 200);
+      }
+    }
+    return document.title.trim().slice(0, 200);
+  }
+
+  function pickCompanyName() {
+    // Meta tags are the most reliable for company name across ATSes.
+    const og = document.querySelector('meta[property="og:site_name"]');
+    if (og?.content) return og.content.trim().slice(0, 120);
+    const app = document.querySelector('meta[name="application-name"]');
+    if (app?.content) return app.content.trim().slice(0, 120);
+    // Fall back to subdomain — greenhouse.io/{company}, jobs.lever.co/{co}
+    const host = window.location.host.toLowerCase();
+    const path = window.location.pathname.split("/").filter(Boolean);
+    if (host.includes("greenhouse") || host.includes("lever") ||
+        host.includes("ashby") || host.includes("smartrecruiters")) {
+      return (path[0] || host).slice(0, 120);
+    }
+    return "";
+  }
+
+  function fireApplyLogged() {
+    if (applyLogged) return;
+    applyLogged = true;
+    const payload = {
+      type: "APPLY_SUBMITTED",
+      url: window.location.href,
+      title: pickJobTitle(),
+      company: pickCompanyName(),
+    };
+    try {
+      chrome.runtime.sendMessage(payload);
+    } catch (e) {
+      // Extension context invalidated (background reload) — ignore.
+    }
+  }
+
+  // Heuristic detection — ATSes have wildly different DOMs so we cast a
+  // wide net. Any of these fires the log:
+  //   (1) A native <form> submit event (works on most Greenhouse/Lever/Ashby)
+  //   (2) A click on a button whose text matches /submit|apply|send application/i
+  //   (3) URL changes to include /confirmation|/thank|/success (SPA post-nav)
+  document.addEventListener("submit", (e) => {
+    // Only count submissions on FORMS that contain an email or resume input
+    // — filters out search-bar submits, cookie-banner acks, etc.
+    const form = e.target;
+    if (form?.tagName !== "FORM") return;
+    const hasApplyFields = !!form.querySelector(
+      'input[type="email"], input[type="file"], input[name*="resume" i]'
+    );
+    if (hasApplyFields) fireApplyLogged();
+  }, true);
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("button, input[type='submit'], a[role='button']");
+    if (!btn) return;
+    const label = (btn.textContent || btn.value || "").trim().toLowerCase();
+    if (/^(submit application|submit|send application|apply now)$/i.test(label)) {
+      // Delay slightly so validation errors have a chance to cancel — a
+      // confirmation URL change (below) will catch it if it goes through.
+      setTimeout(fireApplyLogged, 1500);
+    }
+  }, true);
+
+  let lastUrl = window.location.href;
+  new MutationObserver(() => {
+    if (window.location.href === lastUrl) return;
+    lastUrl = window.location.href;
+    if (/(confirmation|thank[-_ ]?you|success|submitted|complete)/i
+        .test(window.location.pathname + window.location.search)) {
+      fireApplyLogged();
+    }
+  }).observe(document, { subtree: true, childList: true });
 })();

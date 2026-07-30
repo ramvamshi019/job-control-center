@@ -56,8 +56,17 @@
 
   <details id="settings-panel" style="display:none">
     <summary style="display:none"></summary>
+    <div class="field">
+      <label>JCC API URL</label>
+      <input id="api-url" type="text" placeholder="http://localhost:8000">
+    </div>
+    <div style="font-size:11px;color:#666;margin:-2px 0 8px 106px">
+      Where to POST /applications/log-external on form submit.
+      Default assumes SSH tunnel on port 8000. Use https://…sslip.io if backend
+      is publicly reachable.
+    </div>
     <div id="profile-fields"></div>
-    <button id="save-btn" style="margin-top:8px">💾 Save profile</button>
+    <button id="save-btn" style="margin-top:8px">💾 Save profile + API URL</button>
   </details>
 
   <script src="popup.js"></script>

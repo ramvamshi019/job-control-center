@@ -2043,11 +2043,23 @@ elif page == "⚡ Fast Apply":
     else:
         st.caption(f"👉 Open ↗, click **⚡ Fill Application**, upload your résumé, submit, "
                    f"then tick **Applied?** here. Résumé: `resumes/master/`")
+
+        # Pull AI fit scores for jobs in queue so Ram sees Claude's opinion
+        # inline. Bulk-query /ai_rank/queue up to 200 items and index by job_id.
+        ai_map = {}
+        try:
+            _ai = api_get("/ai_rank/queue", limit=200) or {}
+            for it in _ai.get("items") or []:
+                ai_map[it["id"]] = it.get("fit_score")
+        except Exception:
+            pass
+
         rows = [{
             "id": j.get("id"),
             "applied": j.get("status") == "Applied",
             "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
             "score": j.get("match_score"),
+            "ai": ai_map.get(j.get("id")),
             "title": j.get("title"),
             "company": j.get("company_name"),
             "location": j.get("location"),
@@ -2058,14 +2070,18 @@ elif page == "⚡ Fast Apply":
         edited = st.data_editor(
             df, key="fastapply_ed_" + str(abs(hash(tuple(r["id"] for r in rows)))),
             hide_index=True, use_container_width=True,
-            disabled=["sponsor", "score", "title", "company", "location", "ats", "open"],
-            column_order=["sponsor", "score", "title", "company", "location",
+            disabled=["sponsor", "score", "ai", "title", "company", "location", "ats", "open"],
+            column_order=["sponsor", "score", "ai", "title", "company", "location",
                           "ats", "open", "applied"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?", help="Tick once you've actually submitted."),
                 "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                 "score": st.column_config.NumberColumn("score", format="%d"),
+                "ai": st.column_config.NumberColumn(
+                    "🚀 AI", format="%d",
+                    help="Claude's fit score (nightly, only for AI-ranked pool). "
+                         "Blank means not yet ranked — check tomorrow's 05:30 UTC batch."),
             },
         )
         status_by_id = {j.get("id"): j.get("status") for j in queue}

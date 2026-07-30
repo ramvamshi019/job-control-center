@@ -976,10 +976,10 @@ elif page == "🎯 Sponsors Watchlist":
                 disabled=["status", "posted", "score", "title", "company", "location",
                           "sponsor_score", "lca_2024", "lca_2025", "lca_wage",
                           "salary", "risk", "open", "referral"],
-                column_order=["dismiss", "status", "sponsor_score", "lca_2024", "lca_2025",
+                column_order=["status", "sponsor_score", "lca_2024", "lca_2025",
                               "lca_wage", "posted", "score", "salary",
                               "title", "company", "location", "risk", "open",
-                              "referral", "applied"],
+                              "referral", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — drops from this list."),
@@ -1188,9 +1188,9 @@ elif page == "🎯 Best Matches":
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "sponsor", "seen", "posted", "score", "title", "company",
                           "location", "risk", "open", "referral"],
-                column_order=["dismiss", "status", "sponsor", "seen", "posted",
+                column_order=["status", "sponsor", "seen", "posted",
                               "score", "title", "company", "location", "risk",
-                              "open", "referral", "applied"],
+                              "open", "referral", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
@@ -1322,9 +1322,9 @@ elif page == "🎓 Entry Level":
             height=grid_h,
             disabled=["status", "sponsor", "seen", "posted", "score",
                       "title", "company", "location", "open"],
-            column_order=["dismiss", "block", "status", "sponsor",
+            column_order=["block", "status", "sponsor",
                           "seen", "posted", "score", "title", "company",
-                          "location", "open", "applied"],
+                          "location", "open", "applied", "dismiss"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
                     "✅ Applied?",
@@ -1465,9 +1465,9 @@ elif page == "🔴 Posted Today":
                 df, key=editor_key, hide_index=True, use_container_width=True,
                 disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
                           "location", "risk", "open"],
-                column_order=["dismiss", "fresh", "status", "sponsor", "posted", "score",
+                column_order=["fresh", "status", "sponsor", "posted", "score",
                               "title", "company", "location", "risk",
-                              "open", "applied"],
+                              "open", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — it's kept (never pruned)."),
@@ -1597,8 +1597,8 @@ elif page == "📆 Last 24 Hours":
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "sponsor", "posted", "score", "title", "company",
                           "location", "risk", "open"],
-                column_order=["dismiss", "status", "sponsor", "posted", "score", "title",
-                              "company", "location", "risk", "open", "applied"],
+                column_order=["status", "sponsor", "posted", "score", "title",
+                              "company", "location", "risk", "open", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — kept, never pruned."),
@@ -1694,8 +1694,8 @@ elif page == "📅 Posted This Week":
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
                 disabled=["status", "sponsor", "posted", "score", "title", "company",
                           "location", "risk", "open"],
-                column_order=["dismiss", "status", "sponsor", "posted", "score", "title",
-                              "company", "location", "risk", "open", "applied"],
+                column_order=["status", "sponsor", "posted", "score", "title",
+                              "company", "location", "risk", "open", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — kept, never pruned."),

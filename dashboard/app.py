@@ -292,6 +292,38 @@ def set_status(job_id: int, status: str, reason: str = ""):
         del stack[:-20]
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _ai_score_maps() -> tuple[dict, dict]:
+    """Return (fit_map, clear_map) keyed by job_id. Cached 60s so multiple
+    grid sections on the same page render don't each re-hit /ai_rank/queue.
+    Blank entries for jobs not yet AI-ranked (the nightly ranker only
+    covers ~40 jobs/night from yesterday's missed backlog)."""
+    fit, clear = {}, {}
+    try:
+        payload = api_get("/ai_rank/queue", limit=200) or {}
+        for it in payload.get("items") or []:
+            fit[it["id"]] = it.get("fit_score")
+            clear[it["id"]] = it.get("clear_odds")
+    except Exception:
+        pass
+    return fit, clear
+
+
+def _ai_column_config() -> dict:
+    """The two column-config entries every grid can copy verbatim. Keeps the
+    tooltip wording identical across pages."""
+    return {
+        "ai": st.column_config.NumberColumn(
+            "🚀 AI", format="%d",
+            help="Claude fit-score (skills match). Blank = not yet ranked."),
+        "clear": st.column_config.NumberColumn(
+            "🚦 clear", format="%d",
+            help="Reality-check: odds you clear the employer's actual filter "
+                 "(OSS/seniority/clearance/etc). Trust this over 'AI' — a high "
+                 "AI + low clear = don't waste a tailoring."),
+    }
+
+
 def handle_grid_edits(edited, status_by_id: dict) -> bool:
     """Reconcile the checkboxes in a data_editor result against the DB.
 
@@ -943,6 +975,7 @@ elif page == "🎯 Sponsors Watchlist":
         # LCA lookup: recent-year real H-1B filings per company (from the
         # enrich_lca batch). Cached 60s at module level.
         lca_by_company = _company_lca_lookup()
+        ai_fit, ai_clear = _ai_score_maps()
 
         def render_sw(subset, key_prefix):
             def _lca(j):
@@ -955,6 +988,8 @@ elif page == "🎯 Sponsors Watchlist":
                 "posted": (j.get("posted_at") or "")[:10]
                           or ("~" + (j.get("discovered_at") or "")[:10]),
                 "score": j.get("match_score"),
+                "ai": ai_fit.get(j.get("id")),
+                "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
                 "company": j.get("company_name"),
                 "location": j.get("location"),
@@ -973,11 +1008,11 @@ elif page == "🎯 Sponsors Watchlist":
             editor_key = f"sw_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-                disabled=["status", "posted", "score", "title", "company", "location",
+                disabled=["status", "posted", "score", "ai", "clear", "title", "company", "location",
                           "sponsor_score", "lca_2024", "lca_2025", "lca_wage",
                           "salary", "risk", "open", "referral"],
                 column_order=["status", "sponsor_score", "lca_2024", "lca_2025",
-                              "lca_wage", "posted", "score", "salary",
+                              "lca_wage", "posted", "score", "ai", "clear", "salary",
                               "title", "company", "location", "risk", "open",
                               "referral", "applied", "dismiss"],
                 column_config={
@@ -1011,6 +1046,7 @@ elif page == "🎯 Sponsors Watchlist":
                         "🤝 referral", display_text="LinkedIn ↗",
                         help="LinkedIn people search for company + role — DM 1st-degree "
                              "for a warm intro BEFORE applying."),
+                    **_ai_column_config(),
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
@@ -1073,6 +1109,7 @@ elif page == "🕵️ JobRight Gap":
     else:
         st.caption(f"👉 Sorted by **exclusivity** (how likely JobRight missed it). "
                    f"Tick **✅ Applied?** to mark + remove a row. {tier_label}.")
+        ai_fit, ai_clear = _ai_score_maps()
         rows = [{
             "id": j.get("id"),
             "applied": False,
@@ -1080,6 +1117,8 @@ elif page == "🕵️ JobRight Gap":
             "edge": j.get("jobright_exclusivity"),
             "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
             "score": j.get("match_score"),
+            "ai": ai_fit.get(j.get("id")),
+            "clear": ai_clear.get(j.get("id")),
             "title": j.get("title"),
             "company": j.get("company_name"),
             "source": j.get("source"),
@@ -1091,9 +1130,9 @@ elif page == "🕵️ JobRight Gap":
         editor_key = "gap_ed_" + str(abs(hash(tuple(r["id"] for r in rows))))
         edited = st.data_editor(
             df, key=editor_key, hide_index=True, use_container_width=True,
-            disabled=["edge", "sponsor", "score", "title", "company", "source",
+            disabled=["edge", "sponsor", "score", "ai", "clear", "title", "company", "source",
                       "location", "why", "open"],
-            column_order=["edge", "sponsor", "score", "title", "company",
+            column_order=["edge", "sponsor", "score", "ai", "clear", "title", "company",
                           "source", "location", "why", "open", "applied", "dismiss"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
@@ -1105,6 +1144,7 @@ elif page == "🕵️ JobRight Gap":
                     min_value=0, max_value=100, format="%d"),
                 "open": st.column_config.LinkColumn("open", display_text="apply ↗"),
                 "score": st.column_config.NumberColumn("score", format="%d"),
+                **_ai_column_config(),
             },
         )
         changed = False
@@ -1162,6 +1202,8 @@ elif page == "🎯 Best Matches":
                     "window with the sliders above.")
             return
 
+        ai_fit, ai_clear = _ai_score_maps()
+
         def render_section(subset, key_prefix):
             rows = [{
                 "id": j.get("id"),
@@ -1172,6 +1214,8 @@ elif page == "🎯 Best Matches":
                 "seen": "~" + (j.get("discovered_at") or "")[:10] if j.get("discovered_at") else "—",
                 "posted": (j.get("posted_at") or "")[:10] or "—",
                 "score": j.get("match_score"),
+                "ai": ai_fit.get(j.get("id")),
+                "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
                 "company": j.get("company_name"),
                 "location": j.get("location"),
@@ -1186,10 +1230,10 @@ elif page == "🎯 Best Matches":
             grid_h = min(len(rows) + 1, 26) * 35 + 3
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-                disabled=["status", "sponsor", "seen", "posted", "score", "title", "company",
-                          "location", "risk", "open", "referral"],
+                disabled=["status", "sponsor", "seen", "posted", "score", "ai", "clear",
+                          "title", "company", "location", "risk", "open", "referral"],
                 column_order=["status", "sponsor", "seen", "posted",
-                              "score", "title", "company", "location", "risk",
+                              "score", "ai", "clear", "title", "company", "location", "risk",
                               "open", "referral", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
@@ -1207,6 +1251,7 @@ elif page == "🎯 Best Matches":
                              "1st-degree connection for a warm intro BEFORE applying -- "
                              "referred apps get 5-10x more callbacks than cold ones."),
                     "score": st.column_config.NumberColumn("score", format="%d"),
+                    **_ai_column_config(),
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
@@ -1298,6 +1343,7 @@ elif page == "🎓 Entry Level":
                     "range to 60 days or dropping the min score.")
             return
 
+        ai_fit, ai_clear = _ai_score_maps()
         rows = [{
             "id": j.get("id"),
             "applied": j.get("status") == "Applied",
@@ -1309,6 +1355,8 @@ elif page == "🎓 Entry Level":
                     if j.get("discovered_at") else "—",
             "posted": (j.get("posted_at") or "")[:10] or "—",
             "score": j.get("match_score"),
+            "ai": ai_fit.get(j.get("id")),
+            "clear": ai_clear.get(j.get("id")),
             "title": j.get("title"),
             "company": j.get("company_name"),
             "location": j.get("location"),
@@ -1320,10 +1368,10 @@ elif page == "🎓 Entry Level":
         edited = st.data_editor(
             df, key=editor_key, hide_index=True, use_container_width=True,
             height=grid_h,
-            disabled=["status", "sponsor", "seen", "posted", "score",
+            disabled=["status", "sponsor", "seen", "posted", "score", "ai", "clear",
                       "title", "company", "location", "open"],
             column_order=["block", "status", "sponsor",
-                          "seen", "posted", "score", "title", "company",
+                          "seen", "posted", "score", "ai", "clear", "title", "company",
                           "location", "open", "applied", "dismiss"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
@@ -1337,6 +1385,7 @@ elif page == "🎓 Entry Level":
                               "Reversible via data/company_blocklist.txt."),
                 "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                 "score": st.column_config.NumberColumn("score", format="%d"),
+                **_ai_column_config(),
             },
         )
 
@@ -1438,6 +1487,8 @@ elif page == "🔴 Posted Today":
 
         # One table renderer, reused per experience band (or once for the flat
         # list). Returns True on the first tick change so the caller can rerun.
+        ai_fit, ai_clear = _ai_score_maps()
+
         def render_section(subset, key_prefix):
             rows = [{
                 "id": j.get("id"),
@@ -1453,6 +1504,8 @@ elif page == "🔴 Posted Today":
                 "posted": ((j.get("posted_at") or "")[:10] if j["_freshness"] == "confirmed"
                            else "~" + (j.get("discovered_at") or "")[:10]) or "—",
                 "score": j.get("match_score"),
+                "ai": ai_fit.get(j.get("id")),
+                "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
                 "company": j.get("company_name"),
                 "location": j.get("location"),
@@ -1463,9 +1516,9 @@ elif page == "🔴 Posted Today":
             editor_key = f"today_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True,
-                disabled=["fresh", "status", "sponsor", "posted", "score", "title", "company",
-                          "location", "risk", "open"],
-                column_order=["fresh", "status", "sponsor", "posted", "score",
+                disabled=["fresh", "status", "sponsor", "posted", "score", "ai", "clear",
+                          "title", "company", "location", "risk", "open"],
+                column_order=["fresh", "status", "sponsor", "posted", "score", "ai", "clear",
                               "title", "company", "location", "risk",
                               "open", "applied", "dismiss"],
                 column_config={
@@ -1486,6 +1539,7 @@ elif page == "🔴 Posted Today":
                                        "(likely rows)."),
                     "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                     "score": st.column_config.NumberColumn("score", format="%d"),
+                    **_ai_column_config(),
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
@@ -1575,17 +1629,7 @@ elif page == "📆 Last 24 Hours":
             st.info("Nothing surviving filters in the last 24h. Check the crawler is running.")
             return
 
-        # Bulk-pull AI ranker data once per page render so every experience
-        # section shares the same map. Maps job_id → (fit_score, clear_odds).
-        # Blank cells = job not yet AI-ranked (ranker only covers ~40/night).
-        ai_fit, ai_clear = {}, {}
-        try:
-            _ai = api_get("/ai_rank/queue", limit=200) or {}
-            for it in _ai.get("items") or []:
-                ai_fit[it["id"]] = it.get("fit_score")
-                ai_clear[it["id"]] = it.get("clear_odds")
-        except Exception:
-            pass
+        ai_fit, ai_clear = _ai_score_maps()
 
         def render_24h_section(subset, key_prefix):
             rows = [{
@@ -1623,14 +1667,7 @@ elif page == "📆 Last 24 Hours":
                         "posted", help="Real posting date (or ~first-seen if source hides date)."),
                     "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                     "score": st.column_config.NumberColumn("score", format="%d"),
-                    "ai": st.column_config.NumberColumn(
-                        "🚀 AI", format="%d",
-                        help="Claude fit-score (skills match). Blank = not yet ranked."),
-                    "clear": st.column_config.NumberColumn(
-                        "🚦 clear", format="%d",
-                        help="Reality-check: odds you clear the employer's actual filter "
-                             "(OSS/seniority/clearance/etc). Trust this over 'AI' — a high "
-                             "AI + low clear = don't waste a tailoring."),
+                    **_ai_column_config(),
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
@@ -1695,6 +1732,8 @@ elif page == "📅 Posted This Week":
                     "sliders above or check the crawler is running.")
             return
 
+        ai_fit, ai_clear = _ai_score_maps()
+
         def render_wk_section(subset, key_prefix):
             rows = [{
                 "id": j.get("id"),
@@ -1704,6 +1743,8 @@ elif page == "📅 Posted This Week":
                 "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
                 "posted": (j.get("posted_at") or "")[:10] or ("~" + (j.get("discovered_at") or "")[:10]),
                 "score": j.get("match_score"),
+                "ai": ai_fit.get(j.get("id")),
+                "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
                 "company": j.get("company_name"),
                 "location": j.get("location"),
@@ -1715,10 +1756,10 @@ elif page == "📅 Posted This Week":
             editor_key = f"wk_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-                disabled=["status", "sponsor", "posted", "score", "title", "company",
-                          "location", "risk", "open"],
-                column_order=["status", "sponsor", "posted", "score", "title",
-                              "company", "location", "risk", "open", "applied", "dismiss"],
+                disabled=["status", "sponsor", "posted", "score", "ai", "clear",
+                          "title", "company", "location", "risk", "open"],
+                column_order=["status", "sponsor", "posted", "score", "ai", "clear",
+                              "title", "company", "location", "risk", "open", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
                         "✅ Applied?", help="Tick when you've applied — kept, never pruned."),
@@ -1728,6 +1769,7 @@ elif page == "📅 Posted This Week":
                         "posted", help="Real posting date (or ~first-seen if source hides date)."),
                     "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                     "score": st.column_config.NumberColumn("score", format="%d"),
+                    **_ai_column_config(),
                 },
             )
             status_by_id = {j.get("id"): j.get("status") for j in subset}
@@ -1827,6 +1869,8 @@ elif page == "🟢 Live Feed":
         # Same tick-to-apply table as "Posted Today", minus the wide `discovered`
         # timestamp that made this page sprawl sideways. Rendered once per
         # experience section so each block stays short enough to actually scan.
+        ai_fit, ai_clear = _ai_score_maps()
+
         def render_section(subset, key_prefix):
             rows = [{
                 "id": j.get("id"),
@@ -1837,6 +1881,8 @@ elif page == "🟢 Live Feed":
                 "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
                 "posted": (j.get("posted_at") or "")[:10] or "—",
                 "score": j.get("match_score"),
+                "ai": ai_fit.get(j.get("id")),
+                "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
                 "company": j.get("company_name"),
                 "location": j.get("location"),
@@ -1850,10 +1896,10 @@ elif page == "🟢 Live Feed":
             editor_key = f"live_ed_{key_prefix}_" + str(abs(hash(tuple(r["id"] for r in rows))))
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True,
-                disabled=["🔴", "status", "sponsor", "posted", "score",
+                disabled=["🔴", "status", "sponsor", "posted", "score", "ai", "clear",
                           "title", "company", "location", "risk", "open"],
                 column_order=["🔴", "status", "sponsor", "posted",
-                              "score", "title", "company", "location", "risk",
+                              "score", "ai", "clear", "title", "company", "location", "risk",
                               "open", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
@@ -1869,6 +1915,7 @@ elif page == "🟢 Live Feed":
                         "posted", help="Original posting date from the source (— if unknown)."),
                     "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                     "score": st.column_config.NumberColumn("score", format="%d"),
+                    **_ai_column_config(),
                 },
             )
 
@@ -2133,15 +2180,7 @@ elif page == "⚡ Fast Apply":
         st.caption(f"👉 Open ↗, click **⚡ Fill Application**, upload your résumé, submit, "
                    f"then tick **Applied?** here. Résumé: `resumes/master/`")
 
-        # Pull AI fit scores for jobs in queue so Ram sees Claude's opinion
-        # inline. Bulk-query /ai_rank/queue up to 200 items and index by job_id.
-        ai_map = {}
-        try:
-            _ai = api_get("/ai_rank/queue", limit=200) or {}
-            for it in _ai.get("items") or []:
-                ai_map[it["id"]] = it.get("fit_score")
-        except Exception:
-            pass
+        ai_fit, ai_clear = _ai_score_maps()
 
         rows = [{
             "id": j.get("id"),
@@ -2149,7 +2188,8 @@ elif page == "⚡ Fast Apply":
             "delete": False,
             "sponsor": "✅ H-1B" if j.get("sponsor_confirmed") else "",
             "score": j.get("match_score"),
-            "ai": ai_map.get(j.get("id")),
+            "ai": ai_fit.get(j.get("id")),
+            "clear": ai_clear.get(j.get("id")),
             "title": j.get("title"),
             "company": j.get("company_name"),
             "location": j.get("location"),
@@ -2160,8 +2200,8 @@ elif page == "⚡ Fast Apply":
         edited = st.data_editor(
             df, key="fastapply_ed_" + str(abs(hash(tuple(r["id"] for r in rows)))),
             hide_index=True, use_container_width=True,
-            disabled=["sponsor", "score", "ai", "title", "company", "location", "ats", "open"],
-            column_order=["sponsor", "score", "ai", "title", "company", "location",
+            disabled=["sponsor", "score", "ai", "clear", "title", "company", "location", "ats", "open"],
+            column_order=["sponsor", "score", "ai", "clear", "title", "company", "location",
                           "ats", "open", "applied", "delete"],
             column_config={
                 "applied": st.column_config.CheckboxColumn(
@@ -2171,10 +2211,7 @@ elif page == "⚡ Fast Apply":
                               "drops from every discovery view. Reversible via Undo."),
                 "open": st.column_config.LinkColumn("open", display_text="open ↗"),
                 "score": st.column_config.NumberColumn("score", format="%d"),
-                "ai": st.column_config.NumberColumn(
-                    "🚀 AI", format="%d",
-                    help="Claude's fit score (nightly, only for AI-ranked pool). "
-                         "Blank means not yet ranked — check tomorrow's 05:30 UTC batch."),
+                **_ai_column_config(),
             },
         )
         status_by_id = {j.get("id"): j.get("status") for j in queue}

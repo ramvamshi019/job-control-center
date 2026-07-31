@@ -1922,7 +1922,7 @@ elif page == "🗓️ Date Browser":
             return (-(ai_fit.get(jid) or -1), -(j.get("match_score") or 0))
         if sort_by == "score desc":
             return (-(j.get("match_score") or 0),)
-        return ((j.get("discovered_at") or ""),)   # newest first (desc via minus? no — sorted asc, so use reverse)
+        return ((j.get("discovered_at") or ""),)
     if sort_by == "newest first":
         data.sort(key=lambda j: j.get("discovered_at") or "", reverse=True)
     else:
@@ -1942,65 +1942,119 @@ elif page == "🗓️ Date Browser":
                 "Try Any-years / no clearance / no sponsor gate.")
         st.stop()
 
-    # Freshness helper: compute how many days since last_seen_at. If > 2d,
-    # the job is likely closed and the apply URL will 404. Show as an emoji.
-    def _staleness(j):
+    # Bulk-pull job_extras for the visible jobs (regex-extracted years /
+    # citizenship / clearance / salary — no Claude tokens).
+    visible = data[:200]  # cap the per-card render at 200; expanders are heavy
+    ids_csv = ",".join(str(j.get("id")) for j in visible)
+    extras_by_id = {}
+    try:
+        _extras = api_get("/job_extras/batch", ids=ids_csv) or {}
+        # keys come back as strings (JSON) — convert to int
+        for k, v in (_extras.get("items") or {}).items():
+            extras_by_id[int(k)] = v
+    except Exception:
+        pass
+
+    # Kick-run enricher button — fills job_extras for the current window
+    ec1, ec2 = st.columns([1, 4])
+    if ec1.button("🔬 Enrich unranked (regex, free)", use_container_width=True,
+                  help="Extracts years-of-experience, citizenship, clearance, "
+                       "salary from every un-extracted job's description. Pure "
+                       "regex — no Claude tokens burned."):
+        r = api_post("/job_extras/run_enrich", None)
+        if r and r.get("ok"):
+            st.success(r.get("message") + " · refresh in ~10s")
+    ec2.caption(f"Extras loaded for **{len(extras_by_id)}/{len(visible)}** visible jobs · "
+                "click any card to expand for details")
+
+    def _staleness_emoji(j):
         ls = (j.get("last_seen_at") or j.get("discovered_at") or "")[:10]
-        if not ls:
-            return "?"
+        if not ls: return "?"
         try:
             days = (date.today() - date.fromisoformat(ls)).days
         except (ValueError, TypeError):
             return "?"
         if days == 0: return "🟢 today"
-        if days == 1: return "🟢 1d ago"
-        if days <= 2: return f"🟡 {days}d ago"
-        if days <= 7: return f"🟠 {days}d ago"
-        return f"🔴 {days}d ago (likely closed)"
+        if days == 1: return "🟢 1d"
+        if days <= 2: return f"🟡 {days}d"
+        if days <= 7: return f"🟠 {days}d"
+        return f"🔴 {days}d closed?"
 
-    rows = [{
-        "id": j.get("id"),
-        "applied": j.get("status") == "Applied",
-        "dismiss": False,
-        "status": (j.get("status") or "")[:10],
-        "sponsor": "✅" if j.get("sponsor_confirmed") else "",
-        "score": j.get("match_score"),
-        "ai": ai_fit.get(j.get("id")),
-        "clear": ai_clear.get(j.get("id")),
-        "title": j.get("title"),
-        "company": j.get("company_name"),
-        "location": j.get("location"),
-        "posted": (j.get("posted_at") or "")[:10] or "—",
-        "last_seen": _staleness(j),
-        "open": apply_url(j),
-    } for j in data[:500]]  # cap at 500 for grid render sanity
-    df = pd.DataFrame(rows).set_index("id")
-    editor_key = f"db_ed_{picked.isoformat()}_{abs(hash(tuple(r['id'] for r in rows)))}"
-    grid_h = min(len(rows) + 1, 30) * 35 + 3
-    edited = st.data_editor(
-        df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-        disabled=["status", "sponsor", "score", "ai", "clear", "title", "company",
-                  "location", "posted", "last_seen", "open"],
-        column_order=["status", "sponsor", "score", "ai", "clear", "title", "company",
-                      "location", "posted", "last_seen", "open", "applied", "dismiss"],
-        column_config={
-            "applied": st.column_config.CheckboxColumn(
-                "✅ Applied?", help="Tick when you've submitted."),
-            "dismiss": st.column_config.CheckboxColumn(
-                "🗑️", help="Dismiss — files to 🗑️ Deleted."),
-            "open": st.column_config.LinkColumn("open", display_text="open ↗"),
-            "score": st.column_config.NumberColumn("score", format="%d"),
-            "last_seen": st.column_config.TextColumn(
-                "🕒 last seen",
-                help="When the crawler last confirmed the job was still live. "
-                     "🔴 >7d = the posting is likely closed and the apply URL "
-                     "will 404. 🟢/🟡 fresh = safe to click."),
-            **_ai_column_config(),
-        },
-    )
-    status_by_id = {j.get("id"): j.get("status") for j in data}
-    if handle_grid_edits(edited, status_by_id):
-        st.rerun()
+    st.caption(f"Showing top {len(visible)} of {len(data)} · click ▶ to expand any job")
+
+    for j in visible:
+        jid = j.get("id")
+        fit = ai_fit.get(jid)
+        clear = ai_clear.get(jid)
+        score = j.get("match_score") or 0
+        ex = extras_by_id.get(jid, {})
+
+        # ---- Header line: badges + title + inline chips ----
+        badge_parts = []
+        if clear is not None:
+            c_color = "#1a7f37" if clear >= 70 else "#9a6700" if clear >= 40 else "#b91c1c"
+            badge_parts.append(f"<span style='background:{c_color};color:#fff;padding:2px 8px;border-radius:4px;font-weight:700'>🚦 {clear}</span>")
+        if fit is not None:
+            f_color = "#1a7f37" if fit >= 80 else "#9a6700" if fit >= 60 else "#666"
+            badge_parts.append(f"<span style='background:{f_color};color:#fff;padding:2px 8px;border-radius:4px;font-weight:700'>🚀 {fit}</span>")
+        badge_parts.append(f"<span style='background:#0969da;color:#fff;padding:2px 8px;border-radius:4px'>score {score}</span>")
+        if j.get("sponsor_confirmed"):
+            badge_parts.append("<span style='background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px'>✅ H-1B</span>")
+
+        # Extra chips from regex enrichment
+        if ex.get("years_min") is not None:
+            yrs = f"{ex['years_min']}yr" if ex['years_max'] in (None, ex['years_min']) else f"{ex['years_min']}-{ex['years_max']}yr"
+            yc = "#1a7f37" if ex['years_min'] <= 2 else "#9a6700" if ex['years_min'] <= 4 else "#b91c1c"
+            badge_parts.append(f"<span style='background:{yc};color:#fff;padding:2px 8px;border-radius:4px'>🎓 {yrs}</span>")
+        if ex.get("citizenship"):
+            badge_parts.append("<span style='background:#b91c1c;color:#fff;padding:2px 8px;border-radius:4px'>🚫 US citizen only</span>")
+        if ex.get("clearance"):
+            badge_parts.append("<span style='background:#b91c1c;color:#fff;padding:2px 8px;border-radius:4px'>🚫 clearance</span>")
+        if ex.get("remote_ok"):
+            badge_parts.append("<span style='background:#3730a3;color:#fff;padding:2px 8px;border-radius:4px'>🏠 remote-ok</span>")
+        if ex.get("salary_min"):
+            sal_str = f"${ex['salary_min']//1000}k+" if not ex.get("salary_max") else f"${ex['salary_min']//1000}k-${ex['salary_max']//1000}k"
+            badge_parts.append(f"<span style='background:#0d5a2b;color:#fff;padding:2px 8px;border-radius:4px'>💰 {sal_str}</span>")
+        badge_parts.append(f"<span style='color:#666;font-size:12px'>{_staleness_emoji(j)}</span>")
+
+        title_line = f"**{j.get('title','?')[:100]}** — {j.get('company_name','?')} · {j.get('location','?')[:40]}"
+        with st.expander(title_line, expanded=False):
+            st.markdown(" ".join(badge_parts), unsafe_allow_html=True)
+
+            act_cols = st.columns([1, 1, 1, 3])
+            if act_cols[0].link_button("🔗 Open job", j.get("job_url") or "#",
+                                       use_container_width=True):
+                pass
+            if act_cols[1].button("✅ Applied", key=f"db_apl_{jid}",
+                                  use_container_width=True):
+                set_status(int(jid), "Applied")
+                st.toast("✅ Marked Applied")
+                st.rerun()
+            if act_cols[2].button("🗑️ Delete", key=f"db_del_{jid}",
+                                  use_container_width=True):
+                set_status(int(jid), "Archived")
+                st.toast("🗑️ Deleted")
+                st.rerun()
+            act_cols[3].caption(
+                f"discovered {(j.get('discovered_at') or '')[:16]} UTC · "
+                f"posted {(j.get('posted_at') or '')[:10] or 'unknown'} · "
+                f"status: {j.get('status','?')}"
+            )
+
+            # Full description preview (first 1200 chars) so Ram can eyeball
+            # without leaving the page
+            desc = (j.get("description") or "").strip()
+            if desc:
+                st.markdown("**📄 Description preview**")
+                st.markdown(
+                    f"<div style='max-height:240px;overflow-y:auto;background:#f6f8fa;"
+                    f"padding:10px;border-radius:6px;font-size:13px;color:#111;"
+                    f"white-space:pre-wrap'>{desc[:1200].replace('<', '&lt;')}"
+                    f"{'...' if len(desc) > 1200 else ''}</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.info("No description text stored — crawler may have grabbed title only.")
 
 elif page == "🟢 Live Feed":
     st.header("🟢 Live Feed")

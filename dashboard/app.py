@@ -1979,38 +1979,36 @@ elif page == "🗓️ Date Browser":
         if days <= 7: return f"🟠 {days}d ago"
         return f"🔴 {days}d ago (closed?)"
 
-    def _years_str(ex):
-        if not ex or ex.get("years_min") is None:
+    # Compact single "flags" column combining years / citizen / clearance /
+    # remote / salary → keeps the table narrow enough to fit title + company
+    # without horizontal scroll.
+    def _flags_str(ex):
+        if not ex:
             return ""
-        lo, hi = ex["years_min"], ex.get("years_max")
-        if hi in (None, lo):
-            return f"{lo}yr"
-        return f"{lo}-{hi}yr"
-
-    def _salary_str(ex):
-        if not ex or not ex.get("salary_min"):
-            return ""
-        lo = ex["salary_min"]; hi = ex.get("salary_max")
-        return f"${lo//1000}k+" if not hi else f"${lo//1000}k-${hi//1000}k"
+        parts = []
+        if ex.get("years_min") is not None:
+            lo, hi = ex["years_min"], ex.get("years_max")
+            parts.append(f"🎓{lo}yr" if hi in (None, lo) else f"🎓{lo}-{hi}yr")
+        if ex.get("salary_min"):
+            lo = ex["salary_min"]; hi = ex.get("salary_max")
+            parts.append(f"💰${lo//1000}k+" if not hi else f"💰${lo//1000}-{hi//1000}k")
+        if ex.get("remote_ok"): parts.append("🏠")
+        if ex.get("citizenship"): parts.append("🚫cit")
+        if ex.get("clearance"): parts.append("🚫cl")
+        return " ".join(parts)
 
     rows = [{
         "id": j.get("id"),
         "applied": j.get("status") == "Applied",
         "dismiss": False,
-        "status": (j.get("status") or "")[:10],
         "sponsor": "✅" if j.get("sponsor_confirmed") else "",
         "score": j.get("match_score"),
         "ai": ai_fit.get(j.get("id")),
         "clear": ai_clear.get(j.get("id")),
-        "years": _years_str(extras_by_id.get(j.get("id"))),
-        "citizen": "🚫" if extras_by_id.get(j.get("id"), {}).get("citizenship") else "",
-        "clearance": "🚫" if extras_by_id.get(j.get("id"), {}).get("clearance") else "",
-        "remote": "🏠" if extras_by_id.get(j.get("id"), {}).get("remote_ok") else "",
-        "salary": _salary_str(extras_by_id.get(j.get("id"))),
+        "flags": _flags_str(extras_by_id.get(j.get("id"))),
         "title": j.get("title"),
         "company": j.get("company_name"),
-        "location": j.get("location"),
-        "posted": (j.get("posted_at") or "")[:10] or "—",
+        "location": (j.get("location") or "")[:35],
         "last_seen": _staleness(j),
         "open": apply_url(j),
     } for j in visible]
@@ -2019,35 +2017,30 @@ elif page == "🗓️ Date Browser":
     grid_h = min(len(rows) + 1, 30) * 35 + 3
     edited = st.data_editor(
         df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-        disabled=["status", "sponsor", "score", "ai", "clear", "years", "citizen",
-                  "clearance", "remote", "salary", "title", "company", "location",
-                  "posted", "last_seen", "open"],
-        column_order=["status", "sponsor", "score", "ai", "clear",
-                      "years", "citizen", "clearance", "remote", "salary",
-                      "title", "company", "location", "posted", "last_seen",
-                      "open", "applied", "dismiss"],
+        disabled=["sponsor", "score", "ai", "clear", "flags",
+                  "title", "company", "location", "last_seen", "open"],
+        column_order=["applied", "dismiss", "sponsor", "score", "ai", "clear",
+                      "flags", "title", "company", "location", "last_seen", "open"],
         column_config={
             "applied": st.column_config.CheckboxColumn(
-                "✅ Applied?", help="Tick when you've submitted."),
+                "✅", help="Tick when you've submitted.", width="small"),
             "dismiss": st.column_config.CheckboxColumn(
-                "🗑️", help="Dismiss — files to 🗑️ Deleted."),
-            "open": st.column_config.LinkColumn("open", display_text="open ↗"),
-            "score": st.column_config.NumberColumn("score", format="%d"),
-            "years": st.column_config.TextColumn(
-                "🎓 yrs", help="Years-of-experience parsed from the JD. Empty = "
-                              "not stated / not yet enriched."),
-            "citizen": st.column_config.TextColumn(
-                "🚫 cit", help="🚫 = JD requires US citizenship."),
-            "clearance": st.column_config.TextColumn(
-                "🚫 cl", help="🚫 = JD requires security clearance (TS/SCI/etc)."),
-            "remote": st.column_config.TextColumn(
-                "🏠", help="🏠 = JD mentions remote / hybrid / WFH."),
-            "salary": st.column_config.TextColumn(
-                "💰 salary", help="Salary range parsed from JD. Empty = not stated."),
+                "🗑️", help="Dismiss — files to 🗑️ Deleted.", width="small"),
+            "sponsor": st.column_config.TextColumn("H1B", width="small"),
+            "open": st.column_config.LinkColumn("open", display_text="↗", width="small"),
+            "score": st.column_config.NumberColumn("score", format="%d", width="small"),
+            "flags": st.column_config.TextColumn(
+                "🎓💰🏠 flags", width="medium",
+                help="Extras extracted from JD:  🎓 years-required  ·  "
+                     "💰 salary  ·  🏠 remote-ok  ·  🚫cit US citizen only  ·  "
+                     "🚫cl security clearance. Empty = not enriched yet or "
+                     "nothing stated in JD."),
+            "title": st.column_config.TextColumn("title", width="large"),
+            "company": st.column_config.TextColumn("company", width="medium"),
+            "location": st.column_config.TextColumn("location", width="medium"),
             "last_seen": st.column_config.TextColumn(
-                "🕒 last seen",
-                help="When crawler last confirmed the URL was live. 🔴 >7d = "
-                     "posting likely closed and apply URL will 404."),
+                "🕒", width="small",
+                help="When crawler last confirmed URL was live. 🔴 >7d = probably closed."),
             **_ai_column_config(),
         },
     )

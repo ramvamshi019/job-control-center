@@ -55,7 +55,14 @@ class Job(SQLModel, table=True):
     # posted_at at all (iCIMS, SmartRecruiters), so date-based retention can
     # never expire them.
     last_seen_at: Optional[datetime] = Field(default_factory=utcnow_naive, index=True)
-    raw_data_hash: str = Field(default="", index=True, description="dedupe key")
+    raw_data_hash: str = Field(default="", index=True, description="dedupe key (source-scoped)")
+
+    # Cross-source dedupe key. Two rows with the same canonical_key are the same
+    # real posting seen via different feeds (e.g. Stripe SWE on Greenhouse AND
+    # Simplify AND HN Hiring). Computed from normalized (company, title, primary
+    # location) — see utils.text.canonical_job_key. Populated by BaseCrawler.crawl()
+    # after normalize_job(); crawlers do NOT need to set it themselves.
+    canonical_key: str = Field(default="", index=True, description="cross-source dedupe key")
 
     # ---- Computed by the engines ----
     match_score: int = Field(default=0, index=True)

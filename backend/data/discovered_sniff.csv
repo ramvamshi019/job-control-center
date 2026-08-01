@@ -1,0 +1,38 @@
+name,career_url,ats_type,h1b_history_score,priority,is_active,notes
+Snowflake,https://careers.snowflake.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+JPMorgan Chase,jpmc.fa.oraclecloud.com|CX_1001,oracle_hcm,40,medium,1,auto-sniffed via sniff_ats.py
+Cisco,https://careers.cisco.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Accenture,accenture.wd103.myworkdayjobs.com|AccentureCareers|userHome,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Capital One,capitalone.wd12.myworkdayjobs.com|Capital_One|login,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Bank of America,ghr.wd1.myworkdayjobs.com|en-us|lateral-us,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Citi,citi.wd5.myworkdayjobs.com|en-US|2,workday,40,medium,1,auto-sniffed via sniff_ats.py
+T-Mobile,tmobile.wd1.myworkdayjobs.com|External|job,workday,40,medium,1,auto-sniffed via sniff_ats.py
+AT&T,att.wd1.myworkdayjobs.com|en-US|ATTGeneral,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Comcast,comcast.wd5.myworkdayjobs.com|en-US|Comcast_Careers,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Target,target.wd5.myworkdayjobs.com|targetcareers|login,workday,40,medium,1,auto-sniffed via sniff_ats.py
+CVS Health,https://jobs.cvshealth.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+UnitedHealth Group,uhg|10000,taleo,40,medium,1,auto-sniffed via sniff_ats.py
+Anthem,elevancehealth.wd1.myworkdayjobs.com|ANT|job,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Humana,https://careers.humana.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Merck,msd.wd5.myworkdayjobs.com|SearchJobs|login,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Johnson & Johnson,jj.wd5.myworkdayjobs.com|JJ|login,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Bristol Myers Squibb,bristolmyerssquibb.wd5.myworkdayjobs.com|en-US|BMS,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Roche,https://careers.roche.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Adobe,https://careers.adobe.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+CrowdStrike,crowdstrike.wd5.myworkdayjobs.com|crowdstrikecareers|page,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Twilio,vs-errors|vs-errors.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+AMD,internal-amd,icims,40,medium,1,auto-sniffed via sniff_ats.py
+Qualcomm,vs-errors|vs-errors.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Applied Materials,vs-errors|vs-errors.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Boeing,boeing.wd1.myworkdayjobs.com|en-US|EXTERNAL_CAREERS,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Raytheon Technologies,https://careers.rtx.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Northrop Grumman,ngc|ngc.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Honeywell,https://careers.honeywell.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+John Deere,johndeere|johndeere.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Rivian,rivian,icims,40,medium,1,auto-sniffed via sniff_ats.py
+Uber,iaziqy.fa.ocs.oraclecloud.com|UberCareers,oracle_hcm,40,medium,1,auto-sniffed via sniff_ats.py
+Expedia,expedia.wd108.myworkdayjobs.com|en-US|search,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Hilton,efet.fa.us2.oraclecloud.com|CX_1,oracle_hcm,40,medium,1,auto-sniffed via sniff_ats.py
+BCG,https://careers.bcg.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+State Street,https://careers.statestreet.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Jump Trading,talent_community,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py

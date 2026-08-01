@@ -28,6 +28,7 @@ from app.config import settings
 from app.models.company import Company
 from app.models.job import Job
 from app.utils.logging import get_logger
+from app.utils.text import canonical_job_key
 
 log = get_logger("crawler")
 
@@ -91,7 +92,12 @@ class BaseCrawler(abc.ABC):
         jobs: List[Job] = []
         for raw in raw_jobs:
             try:
-                jobs.append(self.normalize_job(raw, company))
+                j = self.normalize_job(raw, company)
+                # Auto-populate cross-source dedupe key. Individual crawlers stay
+                # ignorant of it; only the base class knows about canonicalization.
+                if not j.canonical_key:
+                    j.canonical_key = canonical_job_key(j.company_name, j.title, j.location)
+                jobs.append(j)
             except Exception as exc:  # noqa: BLE001
                 log.warning("[%s] could not normalize a job for %s: %s", self.source_name, company.name, exc)
         log.info("[%s] %s -> %d jobs", self.source_name, company.name, len(jobs))

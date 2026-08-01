@@ -196,10 +196,24 @@ def _oracle_hcm(tok: str):
         return None
 
 
+def _jazzhr(tok: str):
+    # JazzHR tenants publish an RSS feed on the same slug host.
+    url = f"https://{tok}.applytojob.com/apply/jobs/feed.rss"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        if r.status_code != 200:
+            return None
+        # Count <item> tags — cheap and reliable across RSS variants.
+        n = r.text.count("<item>")
+        return n
+    except Exception:
+        return None
+
+
 PROBES = {"smartrecruiters": _sr, "workable": _workable,
           "recruitee": _recruitee, "rippling": _rippling, "gem": _gem,
           "breezy": _breezy, "paylocity": _paylocity, "ukg": _ukg,
-          "oracle_hcm": _oracle_hcm}
+          "oracle_hcm": _oracle_hcm, "jazzhr": _jazzhr}
 
 lock = threading.Lock()
 winners: list = []

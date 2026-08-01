@@ -1,12 +1,16 @@
 """
 services/dedupe.py
 ------------------
-Duplicate detection. Two levels:
-  1. raw_data_hash  (company + title + location + url)  -> exact dupes
-  2. job_url                                            -> same posting, diff hash
+Duplicate detection. Three levels, checked in order:
+  1. raw_data_hash  (company + title + location + url)  -> exact same posting from same source
+  2. job_url                                            -> same posting, diff hash (re-crawl)
+  3. canonical_key  (normalized company + title + location) -> SAME real posting seen via
+     a DIFFERENT source (e.g. Stripe req on Greenhouse AND Simplify AND HN Hiring)
+
+Levels 1-2 catch source-scoped dupes; level 3 catches cross-source dupes so the
+same real posting isn't scored/ranked/paid-for-by-Claude three times.
 
 `is_duplicate(session, job)` returns True if we already stored this job.
-This keeps the DB clean when you crawl the same companies repeatedly.
 """
 
 from __future__ import annotations
@@ -31,6 +35,15 @@ def find_duplicate(session: Session, job: Job) -> Job | None:
             return existing
     if job.job_url:
         existing = session.exec(select(Job).where(Job.job_url == job.job_url)).first()
+        if existing:
+            return existing
+    # Cross-source dedupe: same real posting from a different feed. canonical_key
+    # is populated by BaseCrawler.crawl(). Empty key means "not enough signal"
+    # (blank title/company) — skip rather than collapse everything with '' key.
+    if job.canonical_key:
+        existing = session.exec(
+            select(Job).where(Job.canonical_key == job.canonical_key)
+        ).first()
         if existing:
             return existing
     return None

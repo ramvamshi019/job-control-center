@@ -25,7 +25,29 @@ from app.utils.text import normalize, term_in
 log = get_logger("resume_tailor")
 
 
-def pick_base_resume(title: str) -> str:
+# Cluster → base-resume slug. Cluster is a deterministic classification of the
+# job (see services.cluster.classify) — using it here beats naïve title matching
+# because it accounts for the FULL title+description context, not just keywords
+# in the title. Every cluster falls back to a sensible resume so unclassified
+# ('other') and edge cases never break the tailor flow.
+_CLUSTER_TO_BASE = {
+    "data_eng":     "base_data_engineer",
+    "bi_analytics": "base_data_engineer",   # analyst resume reuses data-eng skills
+    "ml_ai":        "base_data_engineer",   # closest fit until a base_ml exists
+    "cloud_devops": "base_cloud_engineer",
+    "security":     "base_cloud_engineer",  # infra-adjacent
+    "backend":      "base_software_engineer",
+    "fullstack":    "base_software_engineer",
+    "other":        "base_software_engineer",
+}
+
+
+def pick_base_resume(title: str, cluster: str = "") -> str:
+    """Pick a base-resume file for a job. Prefers `cluster` (deterministic
+    classification from title+description) when set; falls back to legacy
+    title-only heuristic so pre-cluster callers still work."""
+    if cluster:
+        return _CLUSTER_TO_BASE.get(cluster, "base_software_engineer")
     t = normalize(title)
     if "data" in t or "etl" in t or "analytics" in t:
         return "base_data_engineer"
@@ -49,7 +71,7 @@ def _matched_and_missing(desc: str) -> tuple[List[str], List[str]]:
 
 def _rule_based(job: Job) -> str:
     desc = normalize(job.description)
-    base = pick_base_resume(job.title)
+    base = pick_base_resume(job.title, getattr(job, "cluster", ""))
     matched, missing = _matched_and_missing(desc)
 
     lines = [

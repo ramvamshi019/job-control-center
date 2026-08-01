@@ -64,6 +64,13 @@ class Job(SQLModel, table=True):
     # after normalize_job(); crawlers do NOT need to set it themselves.
     canonical_key: str = Field(default="", index=True, description="cross-source dedupe key")
 
+    # Role cluster: ml_ai | data_eng | bi_analytics | cloud_devops | security |
+    # backend | fullstack | other. Assigned deterministically from title+desc via
+    # app.services.cluster.classify(). Used to pick the right resume variant when
+    # auto-tailoring and to group Best Matches by role type (context-switching
+    # across clusters is the hidden cost of "just apply to more").
+    cluster: str = Field(default="", index=True, description="role cluster slug")
+
     # ---- Computed by the engines ----
     match_score: int = Field(default=0, index=True)
     sponsorship_risk: str = Field(default="unknown", index=True)

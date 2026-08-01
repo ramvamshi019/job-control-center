@@ -28,6 +28,7 @@ from app.crawlers.registry import get_crawler_for
 from app.models.company import Company
 from app.models.job import Job
 from app.services import (
+    cluster,
     cover_letter,
     dedupe,
     filter_engine,
@@ -166,6 +167,11 @@ def persist_company_jobs(session: Session, company: Company, jobs: List[Job]) ->
 
         # 3) Score (still scored so you can audit borderline ones).
         job.match_score, job.fit_reason = scoring_engine.score(job, company)
+
+        # 3b) Cluster (fast regex; no I/O). Populated for every job whether
+        # rejected or not — Rejected clusters help track what filter is doing.
+        if not job.cluster:
+            job.cluster = cluster.classify(job.title, job.description)
 
         # 4) Sponsorship risk.
         job.sponsorship_risk, job.risk_reason = sponsorship_engine.assess(job, company)

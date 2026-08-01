@@ -27,6 +27,21 @@ import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
+# Cluster slug → 2-char emoji shown in the grid's `cl` column. Mirrors
+# backend/app/services/cluster.CLUSTER_LABELS (kept inline so the dashboard
+# has no backend import dependency).
+CLUSTER_EMOJI = {
+    "ml_ai":        "🤖",
+    "data_eng":     "🔬",
+    "bi_analytics": "📊",
+    "cloud_devops": "☁️",
+    "security":     "🔒",
+    "backend":      "⚙️",
+    "fullstack":    "🖥️",
+    "other":        "❓",
+    "":             "",
+}
+
 # Read API_BASE_URL from backend/.env if present, else default.
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "backend", ".env"))
 API = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
@@ -1196,9 +1211,10 @@ elif page == "🎯 Best Matches":
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
     c1, c2, c3 = st.columns(3)
-    bm_min_score = c1.slider("Min match score", 0, 90, 40, step=5,
-                             help="Lower surfaces more (weaker) matches; raise for only the "
-                                  "strongest. 40 ≈ solid, 50+ ≈ strong.")
+    bm_min_score = c1.slider("Min match score", 0, 90, 50, step=5,
+                             help="Default 50 (strong match). 40 ≈ solid but broader; drag "
+                                  "up to 60-70 for only the top matches. Below 40 is basement "
+                                  "you'd never apply to.")
     bm_fresh_days = c2.slider("First seen within N days", 0, 60, 14, step=1,
                               help="0 = any age. Filters on when the crawler first SAW the job — "
                                    "populated for every source, unlike the posted-date used by "
@@ -1241,6 +1257,7 @@ elif page == "🎯 Best Matches":
                 "seen": "~" + (j.get("discovered_at") or "")[:10] if j.get("discovered_at") else "—",
                 "posted": (j.get("posted_at") or "")[:10] or "—",
                 "score": j.get("match_score"),
+                "cl": CLUSTER_EMOJI.get(j.get("cluster") or "", "❓"),
                 "ai": ai_fit.get(j.get("id")),
                 "clear": ai_clear.get(j.get("id")),
                 "title": j.get("title"),
@@ -1257,10 +1274,10 @@ elif page == "🎯 Best Matches":
             grid_h = min(len(rows) + 1, 26) * 35 + 3
             edited = st.data_editor(
                 df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-                disabled=["status", "sponsor", "seen", "posted", "score", "ai", "clear",
+                disabled=["status", "sponsor", "seen", "posted", "score", "cl", "ai", "clear",
                           "title", "company", "location", "risk", "open", "referral"],
                 column_order=["status", "sponsor", "seen", "posted",
-                              "score", "ai", "clear", "title", "company", "location", "risk",
+                              "score", "cl", "ai", "clear", "title", "company", "location", "risk",
                               "open", "referral", "applied", "dismiss"],
                 column_config={
                     "applied": st.column_config.CheckboxColumn(
@@ -1278,6 +1295,11 @@ elif page == "🎯 Best Matches":
                              "1st-degree connection for a warm intro BEFORE applying -- "
                              "referred apps get 5-10x more callbacks than cold ones."),
                     "score": st.column_config.NumberColumn("score", format="%d"),
+                    "cl": st.column_config.TextColumn(
+                        "cl", width="small",
+                        help="Role cluster: 🔬 Data · 🤖 ML/AI · 📊 BI · ☁️ DevOps · "
+                             "🔒 Security · ⚙️ Backend · 🖥️ Full-Stack · ❓ Other. "
+                             "Used to pick the right base resume when auto-tailoring."),
                     **_ai_column_config(),
                 },
             )
@@ -1452,7 +1474,7 @@ elif page == "🔴 Posted Today":
         "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     hide_applied = c1.checkbox("Hide jobs I've already applied to", value=True)
     confirmed_only = c2.checkbox("Only date-confirmed (hide 🟡 LIKELY)", value=False,
                                  help="Tick for the strict old behaviour: only jobs whose "
@@ -1461,6 +1483,9 @@ elif page == "🔴 Posted Today":
                                help="Split today's jobs into experience bands "
                                     "(no-experience-stated · 0–2 · 3–5 · 5+ years), parsed "
                                     "from each posting. Untick for one flat ranked list.")
+    pt_min_score = c4.slider("Min match score", 0, 90, 40, step=5, key="pt_min_score",
+                             help="Hides the score<40 basement (0/3/6/14/25 rows you'd never "
+                                  "apply to). Drag down to see everything.")
 
     @st.fragment(run_every=20)
     def posted_today_feed():
@@ -1490,6 +1515,11 @@ elif page == "🔴 Posted Today":
             data = [j for j in data if j.get("status") != "Applied"]
         # Jobs you dismissed (🗑️ -> Archived) never belong on Posted Today.
         data = [j for j in data if j.get("status") != "Archived"]
+        # Score floor kills the noise: raw feed contains score-0 rows the
+        # filter engine kept as "not hard-rejected" but that Ram would never
+        # actually apply to. Default 40 ≈ solid; drag slider down to see all.
+        if pt_min_score > 0:
+            data = [j for j in data if (j.get("match_score") or 0) >= pt_min_score]
         # Sort: CONFIRMED → LIKELY → NEW BOARD, then by match score within each.
         # Keeps trustworthy rows on top, tentative rows at the bottom.
         _fresh_rank = {"confirmed": 0, "likely": 1, "new_board": 2}
@@ -1622,13 +1652,16 @@ elif page == "📆 Last 24 Hours":
         "Applied": "✅ APPLIED", "Follow-up": "📌 Follow-up", "Approved": "👍 Approved",
         "Need Review": "🔍 Review", "New": "🆕 New",
     }
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     h_hide_applied  = c1.checkbox("Hide applied", value=True, key="h_hide_applied")
     h_only_sponsors = c2.checkbox("Only ✅ sponsors", value=False, key="h_only_sponsors")
     h_only_new      = c3.checkbox("Only 🆕 New (strong match)", value=False, key="h_only_new",
                                   help="Hide the borderline Need-Review rows; show only "
                                        "the strong-match subset already surfacing on Posted Today.")
     h_group         = c4.checkbox("Group by experience", value=True, key="h_group")
+    h_min_score     = c5.slider("Min score", 0, 90, 40, step=5, key="h_min_score",
+                                help="Kills the score<40 basement (0/3/6/14/25 rows). "
+                                     "Default 40 ≈ solid match. Drag to 0 for everything.")
 
     def last_24h_feed():
         raw = filter_feed(api_get("/jobs/", order_by="discovered", discovered_within_hours=24,
@@ -1640,6 +1673,8 @@ elif page == "📆 Last 24 Hours":
             data = [j for j in data if j.get("sponsor_confirmed")]
         if h_only_new:
             data = [j for j in data if j.get("status") == "New"]
+        if h_min_score > 0:
+            data = [j for j in data if (j.get("match_score") or 0) >= h_min_score]
         # Best match first, sponsor wins ties.
         data.sort(key=lambda j: ((j.get("match_score") or 0),
                                  bool(j.get("sponsor_confirmed"))), reverse=True)
@@ -2069,9 +2104,10 @@ elif page == "🟢 Live Feed":
     colD, colE = st.columns([2, 4])
     sort_mode = colD.selectbox("Sort by", ["Best match first", "Newest first"], index=0)
     min_score = colE.slider(
-        "Hide jobs scoring below", 0, 80, 1,
-        help="Most of the feed scores 0 (off-target roles the filters didn't hard-reject). "
-             "Drag to 0 to see absolutely everything.")
+        "Hide jobs scoring below", 0, 80, 40,
+        help="Default 40 hides the score<40 basement (~60% of the feed at any time). "
+             "Anything below 40 has near-zero real conversion — a wall of noise you'd "
+             "never apply to. Drag to 0 to see absolutely everything.")
 
     # Experience bands come from the shared module-level EXP_SECTIONS.
 

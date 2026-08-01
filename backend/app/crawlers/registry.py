@@ -51,6 +51,14 @@ from app.crawlers.amazon import AmazonJobsCrawler
 from app.crawlers.apple import AppleJobsCrawler
 from app.crawlers.jsonld import JSONLDCrawler
 from app.crawlers.adzuna import AdzunaCrawler
+from app.crawlers.aijobs_net import AIJobsNetCrawler
+from app.crawlers.simplify import SimplifyCrawler
+from app.crawlers.microsoft import MicrosoftCareersCrawler
+from app.crawlers.usajobs import USAJobsCrawler
+from app.crawlers.phenom import PhenomCrawler
+from app.crawlers.successfactors import SuccessFactorsCrawler
+from app.crawlers.taleo import TaleoCrawler
+from app.crawlers.jazzhr import JazzHRCrawler
 from app.crawlers.generic_placeholder import GenericCrawler
 from app.models.company import Company
 from app.utils.logging import get_logger
@@ -94,6 +102,14 @@ CRAWLERS: List[BaseCrawler] = [
     AppleJobsCrawler(),   # sentinel: jobs.apple.com hydration-data HTML scrape
     JSONLDCrawler(),      # generic: schema.org JobPosting ld+json on any career URL
     AdzunaCrawler(),      # sentinel: Adzuna aggregator (needs ADZUNA_APP_ID/KEY)
+    # AIJobsNetCrawler(),      # DISABLED: /api/list-jobs endpoint returns 404 as of 2026-07 (redesign?)
+    SimplifyCrawler(),    # sentinel: SimplifyJobs GitHub lists (new-grad + interns) - VERIFIED LIVE 4k+ jobs
+    # MicrosoftCareersCrawler(),  # DISABLED: MSFT migrated to Eightfold-based apply.careers.microsoft.com, 403s direct API
+    USAJobsCrawler(),     # sentinel: official federal jobs API (needs USAJOBS_API_KEY env var)
+    PhenomCrawler(),      # per-company: Phenom People (Snowflake, T-Mobile, Zoom, ...)
+    SuccessFactorsCrawler(),  # per-company: SAP SuccessFactors (F500 footprint)
+    TaleoCrawler(),       # per-company: Oracle Taleo (finance/pharma/retail legacy)
+    JazzHRCrawler(),      # per-company: JazzHR / applytojob.com (SMB)
     GenericCrawler(),  # keep LAST: matches anything as a fallback.
 ]
 

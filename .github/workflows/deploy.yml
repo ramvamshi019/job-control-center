@@ -75,6 +75,17 @@ jobs:
             echo "deploying $OLD → $NEW"
             echo "--- docker compose up -d --build ---"
             docker compose up -d --build
+            echo "--- schema migrations (idempotent, safe to re-run) ---"
+            # Any migrate_*.py script added since last deploy runs here.
+            # Backfill loops are all id-cursor based; safe to re-invoke even
+            # if the column already exists (the scripts short-circuit).
+            for m in backend/scripts/migrate_*.py; do
+              [ -f "$m" ] || continue
+              echo "-> $(basename $m)"
+              docker compose exec -T backend python "scripts/$(basename $m)" || {
+                echo "migration $(basename $m) FAILED — rolling forward anyway; investigate on droplet"
+              }
+            done
             echo "--- verify.sh ---"
             ./deploy/verify.sh
           REMOTE

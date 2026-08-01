@@ -1,0 +1,319 @@
+name,url
+Reddit,https://www.redditinc.com/careers
+Discord,https://discord.com/jobs
+Notion,https://www.notion.so/careers
+Airtable,https://airtable.com/careers
+Figma,https://www.figma.com/careers
+Vercel,https://vercel.com/careers
+Retool,https://retool.com/careers
+Linear,https://linear.app/careers
+Ramp,https://ramp.com/careers
+Brex,https://www.brex.com/careers
+Mercury,https://mercury.com/jobs
+Anthropic,https://www.anthropic.com/careers
+OpenAI,https://openai.com/careers
+Scale AI,https://scale.com/careers
+Hugging Face,https://huggingface.co/jobs
+Cohere,https://cohere.com/careers
+Perplexity,https://www.perplexity.ai/hub/careers
+Character AI,https://character.ai/careers
+Runway,https://runwayml.com/careers
+Stability AI,https://stability.ai/careers
+Together AI,https://www.together.ai/careers
+Modal,https://modal.com/careers
+Replicate,https://replicate.com/careers
+Fireworks AI,https://fireworks.ai/careers
+Groq,https://groq.com/careers
+Cerebras,https://www.cerebras.net/careers
+Databricks,https://www.databricks.com/company/careers/open-positions
+Snowflake Deep,https://careers.snowflake.com/us/en/search-results
+Anyscale,https://www.anyscale.com/careers
+Weaviate,https://weaviate.io/company/careers
+Pinecone,https://www.pinecone.io/careers
+LangChain,https://www.langchain.com/careers
+LlamaIndex,https://www.llamaindex.ai/careers
+Chroma,https://www.trychroma.com/careers
+Weights & Biases,https://wandb.ai/careers
+Coiled,https://www.coiled.io/careers
+dbt Labs,https://www.getdbt.com/careers/jobs
+Fivetran,https://www.fivetran.com/careers
+Airbyte,https://airbyte.com/careers
+Prefect,https://www.prefect.io/careers
+Dagster,https://dagster.io/careers
+Estuary,https://estuary.dev/careers
+Materialize,https://materialize.com/careers
+Motherduck,https://motherduck.com/careers
+Y42,https://www.y42.com/careers
+Hex,https://hex.tech/careers
+Mode,https://mode.com/careers
+Hightouch,https://hightouch.com/careers
+Census,https://www.getcensus.com/careers
+Rudderstack,https://www.rudderstack.com/careers
+Segment,https://segment.com/careers
+Amplitude,https://amplitude.com/careers
+Mixpanel,https://mixpanel.com/careers
+Heap,https://heap.io/careers
+PostHog,https://posthog.com/careers
+FullStory,https://www.fullstory.com/careers
+Hotjar,https://www.hotjar.com/careers
+Datadog Deep,https://careers.datadoghq.com/all-jobs/
+Sumo Logic,https://www.sumologic.com/careers
+Sentry,https://sentry.io/careers
+Rollbar,https://rollbar.com/careers
+Honeycomb,https://www.honeycomb.io/careers
+Grafana,https://grafana.com/about/careers
+LogicMonitor,https://www.logicmonitor.com/careers
+LaunchDarkly,https://launchdarkly.com/careers
+Optimizely,https://www.optimizely.com/careers
+Split,https://www.split.io/careers
+Statsig,https://statsig.com/careers
+Auth0,https://www.okta.com/careers
+Frontegg,https://frontegg.com/careers
+Descope,https://www.descope.com/careers
+Duo Security,https://duo.com/about/careers
+Yubico,https://www.yubico.com/careers
+1Password,https://1password.com/careers
+Bitwarden,https://bitwarden.com/careers
+Dashlane,https://www.dashlane.com/careers
+LastPass,https://www.lastpass.com/careers
+Wiz,https://www.wiz.io/careers
+Snyk,https://snyk.io/careers
+Aqua Security,https://www.aquasec.com/careers
+Sysdig,https://sysdig.com/careers
+Lacework,https://www.lacework.com/careers
+Orca Security,https://orca.security/careers
+Rapid7,https://www.rapid7.com/about/careers
+Tenable,https://www.tenable.com/careers
+Qualys,https://www.qualys.com/careers
+Zscaler,https://www.zscaler.com/careers
+Netskope,https://www.netskope.com/careers
+Cato Networks,https://www.catonetworks.com/careers
+Illumio,https://www.illumio.com/careers
+SentinelOne,https://www.sentinelone.com/careers
+Cybereason,https://www.cybereason.com/careers
+Trellix,https://www.trellix.com/careers
+Sophos,https://www.sophos.com/en-us/company/careers
+ExtraHop,https://www.extrahop.com/careers
+Vectra AI,https://www.vectra.ai/careers
+Arctic Wolf,https://arcticwolf.com/careers
+Recorded Future,https://www.recordedfuture.com/careers
+Sumo Logic Deep,https://www.sumologic.com/jobs
+Coupa,https://www.coupa.com/careers
+Coupa Careers,https://careers.coupa.com
+Anaplan,https://www.anaplan.com/careers
+Workiva,https://www.workiva.com/careers
+Nintex,https://www.nintex.com/careers
+Alteryx,https://www.alteryx.com/careers
+UiPath,https://www.uipath.com/careers
+Automation Anywhere,https://www.automationanywhere.com/company/careers
+Zapier,https://zapier.com/jobs
+Make,https://www.make.com/en/careers
+n8n,https://n8n.io/careers
+Tray,https://tray.io/careers
+Boomi,https://boomi.com/company/careers
+MuleSoft,https://www.mulesoft.com/careers
+Talend,https://www.talend.com/about-us/careers
+Informatica,https://www.informatica.com/about-us/careers.html
+Denodo,https://www.denodo.com/en/about-denodo/careers
+Starburst,https://www.starburst.io/careers
+Presto,https://prestodb.io/careers
+Trino,https://trino.io/careers
+Dremio,https://www.dremio.com/careers
+Immuta,https://www.immuta.com/careers
+Privacera,https://privacera.com/careers
+Bigeye,https://www.bigeye.com/careers
+Great Expectations,https://greatexpectations.io/careers
+Monte Carlo,https://www.montecarlodata.com/careers
+Datafold,https://www.datafold.com/careers
+Acceldata,https://www.acceldata.io/careers
+Metaplane,https://www.metaplane.com/careers
+Anomalo,https://www.anomalo.com/careers
+Collibra,https://www.collibra.com/us/en/careers
+Alation,https://www.alation.com/careers
+Atlan,https://atlan.com/careers
+Select Star,https://www.selectstar.com/careers
+DataHub,https://www.acryldata.io/careers
+Boston Consulting Group,https://careers.bcg.com
+Booz Allen Hamilton,https://careers.boozallen.com
+Leidos,https://careers.leidos.com
+CACI,https://careers.caci.com
+ManTech,https://careers-mantech.icims.com/jobs/search
+SAIC,https://jobs.saic.com
+Peraton,https://careers.peraton.com
+KBR,https://careers.kbr.com
+Parsons,https://careers.parsons.com
+BAE Systems,https://jobs.baesystems.com
+L3Harris,https://careers.l3harris.com
+Textron,https://careers.textron.com
+Spirit AeroSystems,https://www.spiritaero.com/careers
+Collins Aerospace,https://jobs.collinsaerospace.com
+Pratt & Whitney,https://jobs.rtx.com
+Bell Textron,https://careers.bellflight.com
+Sikorsky,https://www.lockheedmartinjobs.com
+GE Aerospace,https://www.geaerospace.com/careers
+GE Healthcare,https://jobs.gehealthcare.com
+GE Vernova,https://www.gevernova.com/careers
+Ericsson,https://www.ericsson.com/en/careers
+Nokia,https://www.nokia.com/about-us/careers
+Ericsson NA,https://jobs.ericsson.com
+Samsung,https://www.samsung.com/us/careers
+LG,https://www.lg.com/us/about-lg/careers
+Sony,https://www.sony.com/en/SonyInfo/Jobs
+Panasonic,https://na.panasonic.com/us/careers
+Hitachi Vantara,https://www.hitachivantara.com/en-us/company/careers
+Fujitsu,https://www.fujitsu.com/global/about/careers
+NEC,https://www.nec.com/en/global/about/recruit
+Toshiba,https://www.toshiba.com/tai/careers
+Hitachi,https://www.hitachi.com/recruit
+Ericsson Careers,https://www.ericsson.com/en/careers/join-ericsson
+Airtel,https://www.airtel.in/careers
+BT Group,https://www.bt.com/careers
+Deutsche Telekom,https://careers.telekom.com
+Orange,https://careers.orange.com
+Telefonica,https://www.telefonica.com/en/talent
+Vodafone,https://careers.vodafone.com
+Charter Communications,https://jobs.spectrum.com
+Cox Communications,https://jobs.coxenterprises.com
+DISH Network,https://careers.dish.com
+DirecTV,https://careers.directv.com
+Sling TV,https://careers.sling.com
+Netflix,https://explore.jobs.netflix.net
+Spotify,https://www.lifeatspotify.com
+Warner Bros Discovery,https://careers.wbd.com
+Paramount,https://careers.paramount.com
+Disney,https://jobs.disneycareers.com
+NBCUniversal,https://www.nbcunicareers.com
+Fox Corporation,https://careers.foxcorporation.com
+Meta Platforms,https://www.metacareers.com
+Instagram,https://www.metacareers.com
+WhatsApp,https://www.metacareers.com
+YouTube,https://careers.google.com
+Alphabet,https://careers.google.com
+DeepMind,https://deepmind.google/careers
+Waymo,https://waymo.com/careers
+Cruise,https://getcruise.com/careers
+Zoox,https://zoox.com/careers
+Aurora,https://aurora.tech/careers
+Nuro,https://nuro.ai/careers
+Argo AI,https://www.argo.ai/careers
+Motional,https://motional.com/careers
+Applied Intuition,https://appliedintuition.com/careers
+Torc Robotics,https://torc.ai/careers
+Kodiak Robotics,https://kodiak.ai/careers
+Embark Trucks,https://embarktrucks.com/careers
+Bird,https://www.bird.co/careers
+Lime,https://www.li.me/careers
+Turo,https://turo.com/careers
+Getaround,https://www.getaround.com/careers
+Robinhood,https://careers.robinhood.com
+Wealthfront,https://www.wealthfront.com/careers
+Betterment,https://www.betterment.com/careers
+Chime,https://www.chime.com/careers
+Affirm,https://www.affirm.com/careers
+Klarna,https://www.klarna.com/careers
+Afterpay,https://afterpay.com/en-US/careers
+Marqeta,https://www.marqeta.com/careers
+Adyen,https://careers.adyen.com
+Stripe,https://stripe.com/jobs
+Plaid,https://plaid.com/careers
+Truelayer,https://truelayer.com/careers
+MX,https://www.mx.com/careers
+Yodlee,https://www.yodlee.com/careers
+Envestnet,https://www.envestnet.com/careers
+SoFi,https://www.sofi.com/careers
+Upstart,https://www.upstart.com/careers
+LendingClub,https://www.lendingclub.com/company/careers
+Prosper,https://www.prosper.com/careers
+Nerdwallet,https://www.nerdwallet.com/p/careers
+Credit Karma,https://careers.creditkarma.com
+NuBank,https://international.nubank.com.br/careers
+Revolut,https://www.revolut.com/careers
+Wise,https://wise.jobs
+Deel,https://www.deel.com/careers
+Remote,https://remote.com/careers
+Rippling,https://www.rippling.com/careers
+Gusto,https://gusto.com/careers
+Justworks,https://www.justworks.com/careers
+Trinet,https://careers.trinet.com
+Paycor,https://www.paycor.com/careers
+Paycom,https://www.paycom.com/careers
+Ceridian,https://www.dayforce.com/careers
+BambooHR,https://www.bamboohr.com/careers
+Lattice,https://lattice.com/careers
+15Five,https://www.15five.com/careers
+Culture Amp,https://www.cultureamp.com/careers
+Peakon,https://www.workday.com/en-us/company/careers.html
+Betterworks,https://www.betterworks.com/careers
+Reflektive,https://www.reflektive.com/careers
+Greenhouse Software,https://www.greenhouse.io/careers
+Lever,https://www.lever.co/careers
+Ashby,https://www.ashbyhq.com/careers
+Rippling ATS,https://ashbyhq.com/rippling
+Rippling Careers,https://ats.rippling.com/rippling/jobs
+Notion Deep,https://www.notion.so/careers
+Coda,https://coda.io/careers
+Almanac,https://almanac.io/careers
+Miro,https://miro.com/careers
+Mural,https://www.mural.co/careers
+Whimsical,https://whimsical.com/careers
+Loom,https://www.loom.com/careers
+Zight,https://zight.com/careers
+Grain,https://grain.com/careers
+Fireflies,https://fireflies.ai/careers
+Otter,https://otter.ai/careers
+Rev,https://www.rev.com/careers
+Descript,https://www.descript.com/careers
+Krisp,https://krisp.ai/careers
+Wistia,https://wistia.com/careers
+Vidyard,https://www.vidyard.com/careers
+Loom Deep,https://loom.com/careers
+Contentful,https://www.contentful.com/careers
+Sanity,https://www.sanity.io/careers
+Strapi,https://strapi.io/careers
+Storyblok,https://www.storyblok.com/careers
+Prismic,https://prismic.io/careers
+Ghost,https://ghost.org/careers
+WordPress VIP,https://wpvip.com/careers
+Automattic,https://automattic.com/work-with-us
+Squarespace,https://www.squarespace.com/careers
+Wix,https://www.wix.com/jobs
+Webflow,https://webflow.com/careers
+Framer,https://www.framer.com/careers
+Bubble,https://bubble.io/careers
+Glide,https://www.glideapps.com/careers
+Softr,https://www.softr.io/careers
+Retool Deep,https://retool.com/careers/jobs
+Zapier Deep,https://zapier.com/jobs/open-positions
+Slack,https://careers.slack.com
+Asana,https://asana.com/jobs
+Monday,https://monday.com/careers
+ClickUp,https://clickup.com/careers
+Trello,https://trello.com/en-US/jobs
+Basecamp,https://37signals.com/jobs
+Height,https://height.app/careers
+Todoist,https://doist.com/careers
+Notion Deep2,https://www.notion.com/careers
+Wrike,https://www.wrike.com/careers
+Smartsheet,https://www.smartsheet.com/careers
+Airtable Deep,https://airtable.com/careers/positions
+Grammarly,https://www.grammarly.com/jobs
+Duolingo,https://careers.duolingo.com
+Chegg,https://www.chegg.com/careers
+Coursera,https://about.coursera.org/careers
+Udemy,https://careers.udemy.com
+edX,https://www.edx.org/careers
+Skillshare,https://www.skillshare.com/careers
+MasterClass,https://www.masterclass.com/careers
+Brilliant,https://brilliant.org/careers
+Khan Academy,https://www.khanacademy.org/careers
+Outlier,https://careers.outlier.org
+ZipRecruiter,https://www.ziprecruiter.com/careers
+Indeed,https://www.indeedjobs.com/indeed
+LinkedIn,https://careers.linkedin.com
+Handshake,https://joinhandshake.com/careers
+Glassdoor,https://www.glassdoor.com/employers/careers
+Levels FYI,https://www.levels.fyi/careers
+Wellfound,https://wellfound.com/jobs
+Dice,https://careers.dice.com
+Monster,https://careers.monster.com
+CareerBuilder,https://careerbuilder.com/careers

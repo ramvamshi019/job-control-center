@@ -1,0 +1,37 @@
+name,career_url,ats_type,h1b_history_score,priority,is_active,notes
+Character AI,character,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Fireworks AI,fireworksai,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Groq,groq,gem,40,medium,1,auto-sniffed via sniff_ats.py
+Snowflake Deep,snowflake,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Coiled,coiled,lever,40,medium,1,auto-sniffed via sniff_ats.py
+Segment,vs-errors|vs-errors.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Sumo Logic,embed,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Grafana,grafanalabs,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Split,harnessinc,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Descope,descope,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Duo Security,https://careers.cisco.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+ExtraHop,extrahopnetworks,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Bigeye,bigeye,gem,40,medium,1,auto-sniffed via sniff_ats.py
+Monte Carlo,montecarlodata,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Boston Consulting Group,https://careers.bcg.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+CACI,app|app.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+KBR,https://careers.kbr.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+BAE Systems,https://jobs.baesystems.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Spirit AeroSystems,spiritaero,icims,40,medium,1,auto-sniffed via sniff_ats.py
+Collins Aerospace,https://careers.rtx.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+Pratt & Whitney,https://careers.rtx.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+GE Vernova,gevernova.wd5.myworkdayjobs.com|Vernova_ExternalSite|job,workday,40,medium,1,auto-sniffed via sniff_ats.py
+Ericsson NA,vs-errors|vs-errors.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Deutsche Telekom,telekom-growthhub|telekom-growthhub.com,eightfold,40,medium,1,auto-sniffed via sniff_ats.py
+Warner Bros Discovery,https://careers.wbd.com,phenom,40,medium,1,auto-sniffed via sniff_ats.py
+NBCUniversal,my-applications,smartrecruiters,40,medium,1,auto-sniffed via sniff_ats.py
+Applied Intuition,applied,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Torc Robotics,embed,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Lime,Lime,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+BambooHR,www,bamboohr,40,medium,1,auto-sniffed via sniff_ats.py
+Culture Amp,cultureamp,greenhouse,40,medium,1,auto-sniffed via sniff_ats.py
+Notion Deep,notion,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Fireflies,fireflies,gem,40,medium,1,auto-sniffed via sniff_ats.py
+Rev,rev,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Notion Deep2,notion,ashby,40,medium,1,auto-sniffed via sniff_ats.py
+Skillshare,skillshare,workable,40,medium,1,auto-sniffed via sniff_ats.py

@@ -1893,13 +1893,16 @@ elif page == "🗓️ Date Browser":
              "survive the employer's filter.",
     )
 
-    m1, m2, m3 = st.columns([2, 2, 2])
+    m1, m2, m3, m4 = st.columns([2, 2, 2, 2])
     only_sponsors = m1.checkbox("Only ✅ H-1B sponsors", value=False)
     hide_applied = m2.checkbox("Hide jobs I've already applied to", value=True)
     hide_stale = m3.checkbox("Hide 🔴 stale (>7d not seen — URL likely dead)", value=True,
                              help="Drops jobs where the crawler hasn't confirmed "
                                   "the URL is still live in the last 7 days. "
                                   "These usually 404 when clicked.")
+    db_min_score = m4.slider("Min match score", 0, 90, 40, step=5, key="db_min_score",
+                             help="Hides score<40 basement rows (the 0/3/6/14/25 noise "
+                                  "you'd never apply to). Drag to 0 to see everything.")
 
     # Compute the discovered_within_hours window from picked date.
     now = datetime.utcnow()
@@ -1927,6 +1930,8 @@ elif page == "🗓️ Date Browser":
         cutoff_stale = (date.today() - timedelta(days=7)).isoformat()
         data = [j for j in data
                 if ((j.get("last_seen_at") or j.get("discovered_at") or "")[:10] >= cutoff_stale)]
+    if db_min_score > 0:
+        data = [j for j in data if (j.get("match_score") or 0) >= db_min_score]
 
     # Max-years filter using existing helper
     if max_yrs != "Any":
@@ -2038,6 +2043,7 @@ elif page == "🗓️ Date Browser":
         "dismiss": False,
         "sponsor": "✅" if j.get("sponsor_confirmed") else "",
         "score": j.get("match_score"),
+        "cl": CLUSTER_EMOJI.get(j.get("cluster") or "", "❓"),
         "ai": ai_fit.get(j.get("id")),
         "clear": ai_clear.get(j.get("id")),
         "flags": _flags_str(extras_by_id.get(j.get("id"))),
@@ -2052,9 +2058,9 @@ elif page == "🗓️ Date Browser":
     grid_h = min(len(rows) + 1, 30) * 35 + 3
     edited = st.data_editor(
         df, key=editor_key, hide_index=True, use_container_width=True, height=grid_h,
-        disabled=["sponsor", "score", "ai", "clear", "flags",
+        disabled=["sponsor", "score", "cl", "ai", "clear", "flags",
                   "title", "company", "location", "last_seen", "open"],
-        column_order=["applied", "dismiss", "sponsor", "score", "ai", "clear",
+        column_order=["applied", "dismiss", "sponsor", "score", "cl", "ai", "clear",
                       "flags", "title", "company", "location", "last_seen", "open"],
         column_config={
             "applied": st.column_config.CheckboxColumn(
@@ -2064,6 +2070,11 @@ elif page == "🗓️ Date Browser":
             "sponsor": st.column_config.TextColumn("H1B", width="small"),
             "open": st.column_config.LinkColumn("open", display_text="↗", width="small"),
             "score": st.column_config.NumberColumn("score", format="%d", width="small"),
+            "cl": st.column_config.TextColumn(
+                "cl", width="small",
+                help="Role cluster: 🔬 Data · 🤖 ML/AI · 📊 BI · ☁️ DevOps · "
+                     "🔒 Security · ⚙️ Backend · 🖥️ Full-Stack · ❓ Other. "
+                     "Tells you which base resume to lead with when applying."),
             "flags": st.column_config.TextColumn(
                 "🎓💰🏠 flags", width="medium",
                 help="Extras extracted from JD:  🎓 years-required  ·  "

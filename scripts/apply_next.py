@@ -43,7 +43,22 @@ DROPLET_REPO = "/root/job-control-center"
 API = "http://127.0.0.1:8000"
 LAPTOP_RESUMES = Path.home() / "Desktop" / "JCC-resumes"
 
+# The backend container returns paths under /app/... because that's where the
+# code sees them. Those are bind-mounted from the droplet host at DROPLET_REPO,
+# so scp needs the host-side path.
+CONTAINER_PREFIX = "/app/"
+HOST_PREFIX = f"{DROPLET_REPO}/"
+
 ACCOUNT_ATS = {"workday", "icims"}  # need employer accounts; skip in Fast Apply
+
+
+def to_host_path(container_path: str) -> str:
+    """Translate a /app/... container path to its bind-mounted host path so scp
+    can reach it. Any path that doesn't start with /app/ is returned unchanged
+    (so future non-mounted paths still fail loudly rather than silently)."""
+    if container_path.startswith(CONTAINER_PREFIX):
+        return HOST_PREFIX + container_path[len(CONTAINER_PREFIX):]
+    return container_path
 
 
 def ssh(cmd: str, capture: bool = True) -> str:
@@ -120,7 +135,7 @@ def scp_resumes(paths: dict, job: dict) -> list[Path]:
         local = LAPTOP_RESUMES / f"{stem}.{ext}"
         try:
             subprocess.run(
-                ["scp", "-q", f"{DROPLET}:{remote}", str(local)],
+                ["scp", "-q", f"{DROPLET}:{to_host_path(remote)}", str(local)],
                 check=True, timeout=60,
             )
             landed.append(local)

@@ -20,6 +20,10 @@ services:
       - DATABASE_URL=sqlite:////app/backend/data/db/jobs.db
     volumes:
       - jcc-data:/app/backend/data/db
+      # Persist tailored résumés on the HOST so scripts/apply_next.py can scp
+      # them to the laptop. Without this mount, files live only inside the
+      # container filesystem and disappear on every rebuild.
+      - ./resumes/generated:/app/resumes/generated
     ports:
       # localhost-only: the API has no auth and Docker bypasses ufw. Reach it
       # via SSH tunnel, never the public internet. (dashboard talks to it over

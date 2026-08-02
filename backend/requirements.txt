@@ -24,6 +24,11 @@ python-dateutil==2.9.0.post0
 # notes/letters (falls back to rule-based if no key is set in .env).
 anthropic==0.111.0
 # openai==1.54.4
+
+# Résumé output as .docx — the format most ATS forms parse most reliably. The
+# builder degrades to markdown/txt without this, but with it the tailored
+# artifact is upload-ready straight from resumes/generated/.
+python-docx==1.1.2
 # Test suite (dev-only). Removed for prod images.
 pytest>=8.0
 pytest-mock>=3.12
